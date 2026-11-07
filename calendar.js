@@ -235,12 +235,13 @@ const Calendar = (() => {
     wv.classList.toggle('daymode', View.mode === 'day');
     wv.classList.toggle('wkmode', View.mode === 'week' || View.mode === 'workweek');
     if (inCy && !Store.periodAt(View.date)) View.date = Store.segments()[0].from;
+    closePop();   // before the views are redrawn: the open card lives in a column that is about to be replaced
     Agenda.ensure(View.mode === 'cycle' || View.mode === 'list' ? [] : calDays());
     renderBar();
     if (inCy) renderCycleView();
     else if (View.mode === 'list') renderListView();
     else renderWeek();
-    closePop(); reapplyFocus();
+    reapplyFocus();
   }
 
   /* ---------- the open task ---------- */
@@ -252,7 +253,10 @@ const Calendar = (() => {
   function closePop(restore = false) {
     const was = focusId !== null;
     jumpHold = null;
+    // The card sits inside a day column while open; parked back under <body> when closed, so redrawing the
+    // calendar never removes it (that broke every later drag: dragstart closes the card first).
     const p = pop(); p.hidden = true; p.innerHTML = ''; delete p.dataset.task;
+    if (p.parentElement !== document.body) document.body.appendChild(p);
     focusId = null; reapplyFocus();
     if (was && restore && savedSide) Tasks.restoreSide(savedSide);
     savedSide = null;
@@ -360,9 +364,9 @@ const Calendar = (() => {
 
   function initDrag() {
     document.addEventListener('dragstart', e => {
-      closePop();
       const el = e.target.closest && e.target.closest('[data-task]'); if (!el) return;
-      drag = { task: el.dataset.task, src: el.dataset.src, srcp: el.dataset.srcp };
+      drag = { task: el.dataset.task, src: el.dataset.src, srcp: el.dataset.srcp };   // first, so a later problem can't leave an old drag behind
+      closePop();
       e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', drag.task);
       setTimeout(() => { el.classList.add('dragging'); document.body.classList.add('dragging-any'); }, 0);
     });

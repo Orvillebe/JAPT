@@ -249,31 +249,32 @@ const Calendar = (() => {
   // Click on a task in the calendar: a card with everything, the rest dims, the sidebar shows the task
   // and remembers where it was. focusHost: after a jump, only the task in that block or period is marked.
   let focusId = null, focusHost = null, savedSide = null, jumpHold = null;
-  const pop = () => $('pop');
+  // The open card exists only while it is open: opening makes it, closing removes it. It sits in the day
+  // column so it scrolls with the day; when the calendar is redrawn it is closed first.
+  let card = null;
   function closePop(restore = false) {
     const was = focusId !== null;
     jumpHold = null;
-    // The card sits inside a day column while open; parked back under <body> when closed, so redrawing the
-    // calendar never removes it (that broke every later drag: dragstart closes the card first).
-    const p = pop(); p.hidden = true; p.innerHTML = ''; delete p.dataset.task;
-    if (p.parentElement !== document.body) document.body.appendChild(p);
+    if (card) { card.remove(); card = null; }
     focusId = null; reapplyFocus();
     if (was && restore && savedSide) Tasks.restoreSide(savedSide);
     savedSide = null;
   }
   function openPop(el) {
     const id = el.dataset.task, k = Store.task(id); if (!k) return;
-    const bl = Store.idx().of(id).blocks, p = pop();
-    p.setAttribute('style', UI.taskStyle(k)); p.dataset.task = id;
-    p.innerHTML = `<div class="pt">${UI.chk(k)}<b>${esc(k.title)}</b>${UI.whoHtml(k)}<button type="button" class="pen" data-edit="${id}" title="${t('task.edit')}">✎</button></div>
+    if (card) card.remove();
+    const bl = Store.idx().of(id).blocks;
+    card = document.createElement('div');
+    card.id = 'pop'; card.setAttribute('style', UI.taskStyle(k)); card.dataset.task = id;
+    card.innerHTML = `<div class="pt">${UI.chk(k)}<b>${esc(k.title)}</b>${UI.whoHtml(k)}<button type="button" class="pen" data-edit="${id}" title="${t('task.edit')}">✎</button></div>
       ${k.note ? `<div class="pd">${esc(k.note)}</div>` : ''}${UI.metaLine(k)}
       ${bl.length > 1 ? `<div class="pn"><div class="k">${t('pop.also_on')}</div>${bl.filter(b => b.key !== el.dataset.src).map(b => `<div class="pr"><span class="pday">${UI.fmtDay(b.date)}</span><span>${UI.span(UI.fmt(b.start), UI.fmt(b.end))}</span></div>`).join('')}</div>` : ''}`;
     const col = el.closest('.col') || el.closest('.cycles') || el.closest('.cyblock'), colR = col.getBoundingClientRect(), r = el.getBoundingClientRect();
     const wr = $('weekView').getBoundingClientRect(), w = Math.max(r.width, 270);
     let left = r.left - colR.left;
     const over = r.left + w - (wr.right - 6); if (over > 0) left -= over;
-    p.style.width = w + 'px'; p.style.left = left + 'px'; p.style.top = (r.top - colR.top) + 'px';
-    col.appendChild(p); p.hidden = false;
+    card.style.width = w + 'px'; card.style.left = left + 'px'; card.style.top = (r.top - colR.top) + 'px';
+    col.appendChild(card);
   }
   function reapplyFocus() {
     document.querySelectorAll('.hl,.same').forEach(x => x.classList.remove('hl', 'same'));
@@ -434,7 +435,7 @@ const Calendar = (() => {
       if (jumpHold === null) return;
       if (e.target.closest && e.target.closest(`.side .task[data-task="${jumpHold}"]`)) return;
       const id = jumpHold; jumpHold = null;
-      if (focusId === id && pop().hidden) { focusId = null; reapplyFocus(); }
+      if (focusId === id && !card) { focusId = null; reapplyFocus(); }
     });
     $('cycleView').addEventListener('scroll', cyHintSync, { passive: true });
     window.addEventListener('resize', fitBlocks);

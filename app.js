@@ -65,6 +65,10 @@ const App = (() => {
     if (View.page === 'inbox') Inbox.render();
     Inbox.badge();
   }
+  // Something that arrives by itself (the agenda) never redraws under a drag: it waits until you let go.
+  let afterDrag = false;
+  function renderWhenFree() { if (Calendar.dragging()) afterDrag = true; else render(); }
+  document.addEventListener('dragend', () => { if (afterDrag) { afterDrag = false; setTimeout(render, 0); } });
   // Saves change memory; draw once afterwards, not once per change.
   function queueRender() { if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; render(); }); }
 
@@ -130,7 +134,7 @@ const App = (() => {
   }
 
   const versions = () => ({ app: APP_VERSION, db: dbVersion });
-  return { init, show, render, syncSide, navigated, versions, theme, setTheme };
+  return { init, show, render, renderWhenFree, syncSide, navigated, versions, theme, setTheme };
 })();
 
 App.init();

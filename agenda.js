@@ -31,7 +31,7 @@ const Agenda = (() => {
     const fresh = source && (source.local ? !url : source.url === url && Date.now() - source.at < JAPT_CONFIG.agendaMinutes * 60000);
     if (fresh) { if (!win || from < win.from || to > win.to) expand(from, to); return; }
     if (loading) return;
-    loading = (url ? readLink(url) : readLocal()).then(() => { expand(from, to); App.render(); }).finally(() => { loading = null; });
+    loading = (url ? readLink(url) : readLocal()).then(() => { expand(from, to); App.renderWhenFree(); }).finally(() => { loading = null; });
   }
 
   async function readLocal() {

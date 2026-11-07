@@ -37,8 +37,9 @@ One file per task; each file starts with what it is responsible for.
 | `model.js` | The rules as pure functions, without DOM or storage |
 | `data-local.js`, `data-service.js` | Storage in this browser; picking the data layer |
 | `store.js` | Data in memory; every action as one save with its undo |
-| `ui.js` | Shared pieces: cards, pickers, toast, figures |
-| `calendar.js`, `tasks.js` | Taken page: calendar views and dragging; the task lists and form |
+| `ui.js` | Shared pieces: cards, windows, the Escape key, pickers, toast, figures |
+| `drag.js` | Dragging a task: one handler for the page, each screen registers its drop zones |
+| `calendar.js`, `tasks.js` | Taken page: calendar views; the task lists and form |
 | `goals.js`, `inbox.js`, `manage.js` | Doelen, Inbox, Beheer |
 | `agenda.js`, `export.js` | Meetings from the agenda link; backup and analysis export |
 | `app.js` | Starting, version check, pages, reloading at natural moments |

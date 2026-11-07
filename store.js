@@ -9,6 +9,8 @@
  *   - Derived data, rebuilt after every change: the plan index, who is on a task, lookups
  *   - The rules that need more than one row: repeats, planning in the past, goals achieved or
  *     deleted, block changes from today, work period changes, the Bin
+ *   - The rules on what may be saved (a task needs a goal, names are unique, ...): screens ask first
+ *     (the ...Problems functions) to show it at the field; the actions refuse the same with a RuleError
  *
  * Screens read and write only through the Store; they never see the data layer.
  * Pure rules live in model.js; what each rule means is in docs/design.md.
@@ -146,6 +148,34 @@ const Store = (() => {
     return { total: ts.length, done: ts.length - open.length, open: open.length, planned: open.filter(k => listOf(k) === 'planned').length };
   };
 
+  /* ---------- what may be saved ---------- */
+
+  // A refused change: problems is {field: text key}, for example {goal: 'form.need_goal'}.
+  class RuleError extends Error {
+    constructor(problems) { super('JAPT: not saved, ' + Object.values(problems).join(', ')); this.code = 'rule'; this.problems = problems; }
+  }
+  // {field: key or ''} -> only the real problems, or null when everything is fine.
+  const problemsOf = o => { const p = Object.fromEntries(Object.entries(o).filter(([, v]) => v)); return Object.keys(p).length ? p : null; };
+  const refuse = problems => { if (problems) throw new RuleError(problems); };
+  const blank = v => !String(v == null ? '' : v).trim();
+  const sameName = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+  // Outside the Inbox every task has a goal (docs/design.md, Which list a task is in).
+  const taskProblems = ({ title, goalId }, stage) => problemsOf({
+    title: blank(title) && 'form.need_task',
+    goal: stage !== 'inbox' && !goal(goalId) && 'form.need_goal'
+  });
+  const goalProblems = ({ name }) => problemsOf({ name: blank(name) && 'form.need_goal_name' });
+  const clientProblems = (id, name) => problemsOf({
+    name: blank(name) ? 'form.need_name' : raw.clients.some(c => c.id !== id && sameName(c.name, name)) && 'client.exists'
+  });
+  const memberProblems = (id, name) => problemsOf({
+    name: blank(name) ? 'users.need_name' : members().some(m => m.id !== id && sameName(m.name, name)) && 'users.exists'
+  });
+  // The agenda link is read by the browser; only https is allowed, an empty link switches it off.
+  const calendarUrlProblems = url => problemsOf({ url: !blank(url) && !/^https:\/\//i.test(url.trim()) && 'agenda.need_https' });
+  const blockProblems = (id, start, end) => { const b = find('work_blocks', id); return problemsOf({ time: b ? M.blockProblem(raw.work_blocks, b.day, id, start, end) : '' }); };
+
   /* ---------- building blocks of actions ---------- */
 
   const lastPosition = (pred) => {
@@ -201,12 +231,14 @@ const Store = (() => {
   /* ---------- tasks ---------- */
 
   async function createTask({ title, note = '', goalId = null, who = [], deadline = null, repeat = null, stage = 'open' }) {
+    refuse(taskProblems({ title, goalId }, stage));
     const id = newId();
     const row = { id, title, note, goalId, stage, doneOn: null, deadline, repeat: deadline ? repeat : null, nextTaskId: null, position: lastPosition(x => x.stage === stage) };
     return run({ ops: [{ op: 'insert', table: 'tasks', row }, ...whoOps(id, who)] });
   }
   async function updateTask(id, { title, note, goalId, who, deadline, repeat }) {
     const k = task(id);
+    refuse(taskProblems({ title, goalId }, k.stage));
     return run({ ops: [upd('tasks', id, { title, note, goalId, deadline, repeat: deadline ? repeat : null }), ...whoOps(id, who)].concat(goalId !== k.goalId && goal(goalId) && goal(goalId).achievedOn ? [upd('goals', goalId, { achievedOn: null })] : []) });
   }
   const setDone = (id, on) => run(doneOps(task(id), on));
@@ -229,57 +261,48 @@ const Store = (() => {
     return run(out);
   }
 
-  // Dropping a task in a block on a date, or in a work period (docs/design.md, Planning).
-  //   target: {date, blockId} or {period: periodKey}; src: where it was dragged from (a block key
-  //   'date|blockId', a period key, or 'new'); srcPeriod: dragged from the period view, where a task
-  //   with several blocks in that period moves as one; mark: {id, after} for the position.
-  async function plan(taskId, target, src, srcPeriod, mark) {
+  // Dropping a task on a place (docs/design.md, Planning).
+  //   to          the place it is dropped on: {date, blockId} or {period}
+  //   from        the place it was dragged from, or null when it comes from a list
+  //   fromPeriod  dragged from the period view (that period's first day): a task with several blocks
+  //               in that period moves as one
+  //   mark        {id, after}: next to which task it was dropped, for the order
+  const placementTable = place => (place.period ? 'period_placements' : 'block_placements');
+  async function plan(taskId, to, { from = null, fromPeriod = null, mark = null } = {}) {
     const k = task(taskId), I = idx(), ops = [];
-    const key = target.period || target.date + '|' + target.blockId;
-    const inKey = (k2) => (k2.includes('|') ? I.inBlock(k2) : I.inPeriod(k2));
-    const posFor = () => {
-      const list = (target.period ? I.inPeriod(key) : I.inBlock(key)).filter(x => x !== taskId).map(id => {
-        const p = target.period ? I.periodPlacement(key, id) : I.blockPlacement(key, id);
-        return { id, position: p.position };
-      });
-      return M.positionAt(list, mark ? mark.id : null, mark ? mark.after : true);
-    };
-    if (src === key) {   // the same block or period: only the order changes
-      if (!mark) return run({ ops });
-      const p = target.period ? I.periodPlacement(key, taskId) : I.blockPlacement(key, taskId);
-      return run({ ops: [upd(target.period ? 'period_placements' : 'block_placements', p.id, { position: posFor() })] });
+    const posFor = () => M.positionAt(I.tasksIn(to).filter(x => x !== taskId).map(id => ({ id, position: I.placement(to, id).position })), mark ? mark.id : null, mark ? mark.after : true);
+    if (M.samePlace(from, to)) {   // the same block or period: only the order changes
+      return run({ ops: mark ? [upd(placementTable(to), I.placement(to, taskId).id, { position: posFor() })] : [] });
     }
-    const outBlock = bkey => { const p = I.blockPlacement(bkey, taskId); if (p) ops.push(del('block_placements', p.id)); };
-    const outPeriod = pkey => { const p = I.periodPlacement(pkey, taskId); if (p) ops.push(del('period_placements', p.id)); };
-    const outBlocksIn = per => I.of(taskId).blocks.filter(b => b.date >= per.start && b.date <= per.end).forEach(b => ops.push(del('block_placements', b.id)));
-    if (src && src !== 'new') (src.includes('|') ? outBlock : outPeriod)(src);
-    if (srcPeriod) { const sp = periodAt(srcPeriod); if (sp) outBlocksIn(sp); }
+    const drop = (table, id) => { if (!ops.some(o => o.id === id)) ops.push(del(table, id)); };
+    const out = place => { const p = I.placement(place, taskId); if (p) drop(placementTable(place), p.id); };
+    const outBlocksIn = per => I.of(taskId).blocks.filter(b => b.date >= per.start && b.date <= per.end).forEach(b => drop('block_placements', b.id));
+    if (from) out(from);
+    if (fromPeriod) { const sp = periodAt(fromPeriod); if (sp) outBlocksIn(sp); }
     // Within one work period a task is in the period itself or on fixed days, never both: the new place wins.
     let per = null;
-    if (target.period) { per = periodAt(target.period); if (per) outBlocksIn(per); }
-    else { const pr = periodAt(target.date); if (pr) outPeriod(pr.key); }
-    const removed = new Set(ops.map(o => o.id));
-    const already = target.period ? I.periodPlacement(key, taskId) : I.blockPlacement(key, taskId);
-    if (!already || removed.has(already.id)) {
-      if (target.period) ops.push(ins('period_placements', { taskId, periodStart: target.period, position: posFor() }));
-      else ops.push(ins('block_placements', { taskId, date: target.date, blockId: target.blockId, position: posFor() }));
+    if (to.period) { per = periodAt(to.period); if (per) outBlocksIn(per); }
+    else { const pr = periodAt(to.date); if (pr) out({ period: pr.key }); }
+    const already = I.placement(to, taskId);
+    if (!already || ops.some(o => o.id === already.id)) {
+      ops.push(to.period ? ins('period_placements', { taskId, periodStart: to.period, position: posFor() })
+                         : ins('block_placements', { taskId, date: to.date, blockId: to.blockId, position: posFor() }));
     }
     const parts = [{ ops }];
     const tf = {};
     if (k.stage === 'backlog') tf.stage = 'open';
     // Planning in the past checks the task off (docs/design.md, Planning).
-    const doneOn = M.pastDoneDate(target.period ? { period: per } : { date: target.date });
+    const doneOn = M.pastDoneDate(to.period ? { period: per } : { date: to.date });
     if (doneOn && !k.doneOn) {
       const d = doneOps(k, true, doneOn);
       Object.assign(d.ops[0].fields, tf); parts.push(d);
     } else if (Object.keys(tf).length) parts.push({ ops: [upd('tasks', taskId, tf)] });
     return run(merge(parts));
   }
-  async function unplanBlock(key, taskId) { const p = idx().blockPlacement(key, taskId); return run({ ops: p ? [del('block_placements', p.id)] : [] }); }
-  async function unplanPeriod(key, taskId) { const p = idx().periodPlacement(key, taskId); return run({ ops: p ? [del('period_placements', p.id)] : [] }); }
+  async function unplan(place, taskId) { const p = idx().placement(place, taskId); return run({ ops: p ? [del(placementTable(place), p.id)] : [] }); }
   // From the period view: out of every block it has in that period.
-  async function unplanBlocksInPeriod(periodKey, taskId) {
-    const per = periodAt(periodKey); if (!per) return run({ ops: [] });
+  async function unplanBlocksInPeriod(periodStart, taskId) {
+    const per = periodAt(periodStart); if (!per) return run({ ops: [] });
     return run({ ops: idx().of(taskId).blocks.filter(b => b.date >= per.start && b.date <= per.end).map(b => del('block_placements', b.id)) });
   }
 
@@ -309,13 +332,13 @@ const Store = (() => {
       return run({ ops: [upd('tasks', id, { stage: 'open', doneOn: td(), position: lastPosition(x => x.stage === 'open') })] });
     }
     const g = goalId || k.goalId;
-    if (!g) return run({ ops: [] });
+    refuse(problemsOf({ goal: !goal(g) && 'form.need_goal' }));   // planning or backlog needs a goal
     return run({ ops: [upd('tasks', id, { goalId: g, stage: to, position: lastPosition(x => x.stage === to) })] });
   }
 
   /* ---------- goals and clients ---------- */
 
-  const clientNamed = name => raw.clients.find(c => c.name.trim().toLowerCase() === name.trim().toLowerCase()) || null;
+  const clientNamed = name => raw.clients.find(c => sameName(c.name, name)) || null;
   function clientOps(name) {
     if (!name) return { clientId: null, ops: [] };
     const c = clientNamed(name);
@@ -324,10 +347,12 @@ const Store = (() => {
     return { clientId: o.row.id, ops: [o] };
   }
   async function createGoal({ name, note = '', clientName = '', hue }) {
+    refuse(goalProblems({ name }));
     const c = clientOps(clientName);
     return run({ ops: [...c.ops, ins('goals', { name, note, clientId: c.clientId, hue, achievedOn: null })] });
   }
   async function updateGoal(id, { name, note, clientName, hue }) {
+    refuse(goalProblems({ name }));
     const c = clientOps(clientName), g = goal(id), ops = [...c.ops, upd('goals', id, { name, note, clientId: c.clientId, hue })];
     if (g.clientId && g.clientId !== c.clientId && !raw.goals.some(x => x.id !== id && x.clientId === g.clientId))
       ops.push(binOp('clients', g.clientId, newId(), nowIso()));   // its last goal moved to another client
@@ -357,7 +382,7 @@ const Store = (() => {
     if (g.clientId && !raw.goals.some(x => x.id !== id && x.clientId === g.clientId)) ops.push(binOp('clients', g.clientId, group, at));
     return run({ ops });
   }
-  const renameClient = (id, name) => run({ ops: [upd('clients', id, { name })] });
+  async function renameClient(id, name) { refuse(clientProblems(id, name)); return run({ ops: [upd('clients', id, { name: name.trim() })] }); }
 
   /* ---------- work blocks ---------- */
 
@@ -370,7 +395,11 @@ const Store = (() => {
     const moves = raw.block_placements.filter(p => p.blockId === b.id && p.date >= r.newFrom).map(p => upd('block_placements', p.id, { blockId: nb.row.id }));
     return { ops: [upd('work_blocks', b.id, { validTo: r.closeOn }), nb, ...moves], id: nb.row.id };
   }
-  async function reviseBlock(id, change) { const r = reviseOps(find('work_blocks', id), change); await apply(r.ops); return r.id; }
+  async function reviseBlock(id, change) {
+    const b = find('work_blocks', id);
+    if (change.start !== undefined || change.end !== undefined) refuse(blockProblems(id, change.start ?? b.start, change.end ?? b.end));
+    const r = reviseOps(b, change); await apply(r.ops); return r.id;
+  }
   async function createBlock(day, start, end) { const o = ins('work_blocks', { day, start, end, label: '', validFrom: td(), validTo: null }); await apply([o]); return o.row.id; }
   // Taken out from today: tasks planned there from today leave the agenda; the past stays.
   function removeBlockOps(b) {
@@ -398,20 +427,25 @@ const Store = (() => {
     const seg = ins('period_segments', { from, length, unit });
     return apply([seg, { op: 'upsert', table: 'app_settings', id: 'periodActive', fields: { value: true } }]);
   }
-  // Length and start together. Returns an error key, or '' when saved (docs/design.md, Work period).
-  async function changePeriod(from, length, unit) {
+  // A change takes effect from a period that hasn't started yet (docs/design.md, Work period).
+  function periodProblems(from) {
     const segs = segments(), last = segs[segs.length - 1], futureLast = last.from > td(), solo = segs.length === 1 && futureLast;
-    if (!from) return 'period.pick_date';
-    if (!solo && from <= td()) return 'period.from_tomorrow';
-    if (futureLast && segs.length > 1 && from <= segs[segs.length - 2].from) return 'period.before_previous';
+    return problemsOf({
+      from: !from ? 'period.pick_date'
+        : !solo && from <= td() ? 'period.from_tomorrow'
+        : futureLast && segs.length > 1 && from <= segs[segs.length - 2].from && 'period.before_previous'
+    });
+  }
+  // Length and start together.
+  async function changePeriod(from, length, unit) {
+    refuse(periodProblems(from));
+    const segs = segments(), last = segs[segs.length - 1], futureLast = last.from > td(), solo = segs.length === 1 && futureLast;
     const lenChanged = length !== last.length || unit !== last.unit, dateChanged = from !== (solo ? last.from : M.nextPeriodStart(segs));
     let ops = [], after;
     if (futureLast) { ops.push(upd('period_segments', last.id, { from, length, unit })); after = segs.map(s => (s.id === last.id ? { ...s, from, length, unit } : s)); }
     else if (lenChanged || dateChanged) { const o = ins('period_segments', { from, length, unit }); ops.push(o); after = [...segs, o.row]; }
     else after = segs;
-    ops = ops.concat(periodCleanOps(after));
-    await apply(ops);
-    return '';
+    return apply(ops.concat(periodCleanOps(after)));
   }
   // Off: all period placements go; tasks only in a period go back to Nog niet ingepland. Returns their count.
   async function setPeriodActive(on) {
@@ -427,12 +461,21 @@ const Store = (() => {
   /* ---------- settings, members, agenda ---------- */
 
   const setSetting = (key, value) => apply([{ op: 'upsert', table: 'app_settings', id: key, fields: { value } }]);
-  const setCalendarUrl = url => {
+  function setCalendarUrl(url) {
+    refuse(calendarUrlProblems(url));
     const c = raw.calendars.find(x => !x.owner);
+    url = url.trim();
     return apply([c ? upd('calendars', c.id, { url }) : ins('calendars', { name: 'Team', url, owner: null })]);
-  };
-  const addMember = (name, color) => apply([ins('members', { name, color, allowed: true, removedAt: null })]);
-  const updateMember = (id, fields) => apply([upd('members', id, fields)]);
+  }
+  // A new person gets a colour nobody has yet (model.js, colours of people).
+  function addMember(name) {
+    refuse(memberProblems(null, name));
+    return apply([ins('members', { name: name.trim(), color: M.freshColour(members()), allowed: true, removedAt: null })]);
+  }
+  function updateMember(id, fields) {
+    if (fields.name !== undefined) { refuse(memberProblems(id, fields.name)); fields = { ...fields, name: fields.name.trim() }; }
+    return apply([upd('members', id, fields)]);
+  }
   const openTasksOf = id => raw.task_members.filter(r => r.memberId === id && task(r.taskId) && !task(r.taskId).doneOn);
   // Taken off open tasks; done tasks keep the name (docs/design.md, Users).
   const removeMember = id => apply([...openTasksOf(id).map(r => del('task_members', r.id)), upd('members', id, { removedAt: nowIso() })]);
@@ -463,7 +506,8 @@ const Store = (() => {
     idx, task, goal, client, member, whoOf, members, allMembers, clients, goals, openGoals, tasks, inbox, clientOfTask,
     listOf, shownList, dueSoon, isLate, itemsOf, goalStats, blocks, segments, periodAt, periodSetting, blocksOn,
     calendarUrl, plannedFromToday, clientNamed, openTasksOf,
-    createTask, updateTask, setDone, moveToList, plan, unplanBlock, unplanPeriod, unplanBlocksInPeriod, binTask,
+    taskProblems, goalProblems, clientProblems, memberProblems, calendarUrlProblems, blockProblems, periodProblems,
+    createTask, updateTask, setDone, moveToList, plan, unplan, unplanBlocksInPeriod, binTask,
     addInboxTask, processInbox,
     createGoal, updateGoal, achieveGoal, reopenGoal, deleteGoal, renameClient,
     reviseBlock, createBlock, removeBlock, clearDay, copyDay,

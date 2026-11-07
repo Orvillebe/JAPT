@@ -5,6 +5,7 @@
  *   - Dates: local calendar days as 'YYYY-MM-DD', today, weeks from the shared first day
  *   - Work blocks: which blocks exist on a date (a block has a validity), fitting and checking times
  *   - Work periods: which period a date falls in, from the segments in Beheer
+ *   - Places (a block on a date, or a work period) and their one text form
  *   - The plan index: where every task is planned, built once from the placements
  *   - Which list a task is in, due soon, planned late, only planned in the past
  *   - Repeats: the next deadline
@@ -131,6 +132,23 @@ function createModel(CFG) {
     return p ? addDays(p.end, 1) : segs[0].from;
   }
 
+  /* ---------- places ---------- */
+
+  // Where a task can be planned: {date, blockId} (a block on a date) or {period} (a work period, by
+  // its first day). This is the only place that turns a place into text and back:
+  //   placeKey   how the plan index files it: 'date|blockId', or the period's first day
+  //   placeText  one text for both kinds, for the screen (data attributes, where a drag started):
+  //              'block:date|blockId' or 'period:date', so the two can never be mistaken
+  const placeKey = p => (p.period ? p.period : `${p.date}|${p.blockId}`);
+  const placeText = p => (p.period ? 'period:' + p.period : 'block:' + placeKey(p));
+  function parsePlace(s) {
+    const per = /^period:(\d{4}-\d{2}-\d{2})$/.exec(s || '');
+    if (per) return { period: per[1] };
+    const blk = /^block:(\d{4}-\d{2}-\d{2})\|(.+)$/.exec(s || '');
+    return blk ? { date: blk[1], blockId: blk[2] } : null;
+  }
+  const samePlace = (a, b) => !!a && !!b && !!a.period === !!b.period && placeKey(a) === placeKey(b);
+
   /* ---------- the plan index ---------- */
 
   // Where every task is planned, from the stored placements:
@@ -138,6 +156,7 @@ function createModel(CFG) {
   //   periodPlacements {taskId, periodStart, position}
   // Placements in a block that doesn't exist on that date, or in a period that no longer matches the
   // setting, don't count (they are what's left after a change; the Store cleans them up).
+  // Every entry carries its place, so a screen never has to build one by hand.
   function planIndex({ blocks, blockPlacements, periodPlacements, segments, periodActive }) {
     const blockById = Object.fromEntries(blocks.map(b => [b.id, b]));
     const byTask = new Map(), byBlock = new Map(), byPeriod = new Map();
@@ -145,7 +164,8 @@ function createModel(CFG) {
     for (const p of blockPlacements) {
       const b = blockById[p.blockId];
       if (!b || !blockOnDate(b, p.date)) continue;
-      const slot = { ...p, start: b.start, end: b.end, key: p.date + '|' + p.blockId };
+      const place = { date: p.date, blockId: p.blockId };
+      const slot = { ...p, start: b.start, end: b.end, key: placeKey(place), place };
       t(p.taskId).blocks.push(slot);
       if (!byBlock.has(slot.key)) byBlock.set(slot.key, []);
       byBlock.get(slot.key).push(slot);
@@ -153,7 +173,7 @@ function createModel(CFG) {
     if (periodActive) for (const p of periodPlacements) {
       const per = periodIn(p.periodStart, segments);
       if (!per || per.key !== p.periodStart) continue;
-      t(p.taskId).periods.push({ ...p, ...per });
+      t(p.taskId).periods.push({ ...p, ...per, place: { period: per.key } });
       if (!byPeriod.has(per.key)) byPeriod.set(per.key, []);
       byPeriod.get(per.key).push(p);
     }
@@ -164,12 +184,12 @@ function createModel(CFG) {
     }
     byBlock.forEach(v => v.sort(byPos)); byPeriod.forEach(v => v.sort(byPos));
     const EMPTY = { blocks: [], periods: [] };
+    const rows = place => (place.period ? byPeriod : byBlock).get(placeKey(place)) || [];
     return {
       of: id => byTask.get(id) || EMPTY,
-      inBlock: key => (byBlock.get(key) || []).map(p => p.taskId),
-      inPeriod: key => (byPeriod.get(key) || []).map(p => p.taskId),
-      blockPlacement: (key, taskId) => (byBlock.get(key) || []).find(p => p.taskId === taskId),
-      periodPlacement: (key, taskId) => (byPeriod.get(key) || []).find(p => p.taskId === taskId)
+      // the tasks in a place, in their order, and the stored row of one task there
+      tasksIn: place => rows(place).map(p => p.taskId),
+      placement: (place, taskId) => rows(place).find(p => p.taskId === taskId)
     };
   }
 
@@ -281,17 +301,26 @@ function createModel(CFG) {
   // A new goal gets the hue that is used least.
   const freshHue = goals => GOAL_HUES.map(h => ({ h, n: goals.filter(g => goalHue(g) === h).length })).sort((a, b) => a.n - b.n)[0].h;
 
+  /* ---------- colours of people ---------- */
+
+  // Distinct, readable on white and dark; a new person gets the first one nobody has yet (it can be
+  // changed in Beheer). With more people than colours, they are reused in order.
+  const MEMBER_COLOURS = ['#cf6a52', '#4f80bd', '#4f9d6b', '#b07cc6', '#d1a03a', '#3fa0a8', '#c25b8a', '#7a7f8c'];
+  const freshColour = members => MEMBER_COLOURS.find(c => !members.some(u => u.color === c)) || MEMBER_COLOURS[members.length % MEMBER_COLOURS.length];
+
   return {
     parseD, toDs, addDays, addMonths, daysBetween, daysIn, weekday, today, setToday, localDs,
     setWeekStart, getWeekStart, weekFirst, weekDays, isWeekend, weekOrder,
     SNAP, MINLEN, snap, hhmm, hhmm2, parseHm,
     blockOnDate, blocksOn, currentBlocks, blockRevision, blockProblem, fitBlock,
     periodIn, nextPeriodStart,
+    placeKey, placeText, parsePlace, samePlace,
     planIndex, listOf, dueSoon, isLate, onlyPlannedInPast, shownList, pastDoneDate,
     parseRepeat, nextDeadline,
     between, positionAt,
     passes, filterCount,
-    GOAL_HUES, GREY, nearestHue, goalHue, freshHue
+    GOAL_HUES, GREY, nearestHue, goalHue, freshHue,
+    MEMBER_COLOURS, freshColour
   };
 }
 

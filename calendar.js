@@ -6,19 +6,21 @@
  *   - Day and week views: work blocks with their tasks, meetings, the work-period lane on top
  *   - The work-period view (periods side by side) and the list view (planned tasks in time order)
  *   - The open task: a card over the task, the rest dimmed, the sidebar showing it
- *   - Dragging tasks: onto blocks, periods, the sidebar lists and the dock (not in the Inbox)
+ *   - The drop zone for blocks and periods (drag.js); the sidebar lists have their own (tasks.js)
  *   - Jumping from a Plan line in a card to that day or period
  *   - Swiping on a phone to the previous or next day or week
  *
- * Block keys are 'date|blockId'; period keys in the DOM are 'cy@<first day>'.
- * Saving goes through the Store; the rules are in docs/design.md (Planning).
+ * Blocks and periods carry their place in data-place, chips where they sit in data-from (model.js,
+ * places). Saving goes through the Store; the rules are in docs/design.md (Planning).
  */
 
 const Calendar = (() => {
   const M = Model, { $, esc, cap, View } = UI;
-  const PX = 88;   // pixels per hour
-  let H0 = 8, H1 = 18;
-  const CYCLES_SHOWN = 4;
+  const P = M.placeText;
+  const PX = 88;                 // pixels per hour: a half-hour block still fits one task
+  const CYCLES_SHOWN = 4;        // periods side by side in the period view
+  const TIMES_W = 56;            // width of the hours column (px)
+  const MEETING_MIN_H = 18;      // a short meeting is still tall enough for its title (px)
   const td = () => M.today();
 
   /* ---------- periods as shown ---------- */
@@ -43,7 +45,7 @@ const Calendar = (() => {
     while (pr && out.length < CYCLES_SHOWN) { out.push(pr); pr = Store.periodAt(M.addDays(pr.end, 1)); }
     return out;
   }
-  const pkey = o => 'cy@' + o.key;
+  const periodPlace = o => ({ period: o.key });
 
   function calDays() {
     if (View.mode === 'day') return [View.date];
@@ -83,23 +85,25 @@ const Calendar = (() => {
 
   const dim = k => (UI.filterCount() && !UI.passes(k) ? 'dim' : '');
   const part = (n, i) => (n > 1 ? `<span class="p">${i}/${n}</span>` : '');
-  function chip(k, src, { side = '', after = '', extra = '' } = {}) {
-    return `<div class="chip ${k.doneOn ? 'done' : ''} ${Store.isLate(k) ? 'late' : ''} ${dim(k)}" draggable="true" data-task="${k.id}" data-src="${src}"${extra} style="${UI.taskStyle(k)}">
+  // A task in a block or period. from: the place it sits in; fromPeriod: shown in that period's column.
+  function chip(k, from, { side = '', after = '', fromPeriod = null } = {}) {
+    return `<div class="chip ${k.doneOn ? 'done' : ''} ${Store.isLate(k) ? 'late' : ''} ${dim(k)}" draggable="true" data-task="${k.id}" data-from="${P(from)}"${fromPeriod ? ` data-from-period="${fromPeriod}"` : ''} style="${UI.taskStyle(k)}">
       <div class="ct">${UI.chk(k)}<span class="t">${esc(k.title)}</span><span class="cside">${UI.whoHtml(k)}${side}</span></div>${after}${UI.metaLine(k)}</div>`;
   }
   const xBtn = (attr, title) => `<button type="button" class="x" ${attr} title="${title}">×</button>`;
 
   /* ---------- work-period lane above the week ---------- */
 
+  // "2/3": the task's second of three periods (or blocks).
   function cyPart(id, key) { const cs = Store.idx().of(id).periods; return cs.length > 1 ? part(cs.length, cs.findIndex(o => o.key === key) + 1) : ''; }
   function renderLane(days, cols) {
     const lane = $('cycleLane'); lane.style.gridTemplateColumns = cols;
     const groups = [];
     days.forEach((ds, i) => { const o = Store.periodAt(ds); if (!o) return; const g = groups[groups.length - 1]; if (g && g.o.key === o.key) g.z = i; else groups.push({ o, a: i, z: i }); });
     lane.innerHTML = groups.map(g => {
-      const o = g.o, ids = Store.idx().inPeriod(o.key);
-      const chips = ids.map(id => { const k = Store.task(id); return k ? chip(k, pkey(o), { side: cyPart(id, o.key) + xBtn(`data-rm="${pkey(o)}~${id}"`, t('cal.out_of_period')) }) : ''; }).join('');
-      return `<div class="cycle ${days[g.a] > o.start && moreVisible(o, days.slice(g.a), true) ? 'cl' : ''} ${days[g.z] < o.end && moreVisible(o, days.slice(0, g.z + 1), false) ? 'cr' : ''}" data-block="${pkey(o)}" style="grid-column:${g.a + 2} / ${g.z + 3};grid-row:1">
+      const o = g.o, place = periodPlace(o), ids = Store.idx().tasksIn(place);
+      const chips = ids.map(id => { const k = Store.task(id); return k ? chip(k, place, { side: cyPart(id, o.key) + xBtn(`data-unplan="${P(place)}"`, t('cal.out_of_period')) }) : ''; }).join('');
+      return `<div class="cycle ${days[g.a] > o.start && moreVisible(o, days.slice(g.a), true) ? 'cl' : ''} ${days[g.z] < o.end && moreVisible(o, days.slice(0, g.z + 1), false) ? 'cr' : ''}" data-place="${P(place)}" style="grid-column:${g.a + 2} / ${g.z + 3};grid-row:1">
         <div class="cyh"><b>${spanText(o)}</b></div>
         <div class="list">${chips || `<div class="empty">${t('cal.drop_here')}</div>`}</div></div>`;
     }).join('');
@@ -108,29 +112,29 @@ const Calendar = (() => {
   /* ---------- day and week ---------- */
 
   function renderWeek() {
-    const days = calDays(), cols = `56px repeat(${days.length},minmax(0,1fr))`;
+    const days = calDays(), cols = `${TIMES_W}px repeat(${days.length},minmax(0,1fr))`;
     const headEl = $('head'), bodyEl = $('body');
     headEl.style.gridTemplateColumns = cols; bodyEl.style.gridTemplateColumns = cols;
     headEl.innerHTML = '<div></div>' + days.map(ds => `<div class="${ds === td() ? 'today' : ''}">${cap(UI.wd(ds))}<small>${UI.dnum(ds)} ${UI.mshort(ds)}</small></div>`).join('');
     // The hours follow the blocks and meetings, at least dayStart to dayEnd (config.js).
     const bs = days.flatMap(Store.blocksOn), ms = days.flatMap(Agenda.on);
-    H0 = Math.min(JAPT_CONFIG.dayStart, Math.floor(Math.min(...bs.map(b => b.start / 60), ...ms.map(m => m.start / 60), 99)));
-    H1 = Math.max(JAPT_CONFIG.dayEnd, Math.ceil(Math.max(...bs.map(b => b.end / 60), ...ms.map(m => m.end / 60), 0)));
+    const H0 = Math.min(JAPT_CONFIG.dayStart, Math.floor(Math.min(...bs.map(b => b.start / 60), ...ms.map(m => m.start / 60), 24)));
+    const H1 = Math.max(JAPT_CONFIG.dayEnd, Math.ceil(Math.max(...bs.map(b => b.end / 60), ...ms.map(m => m.end / 60), 0)));
     let times = '';
     for (let h = H0; h <= H1; h++) times += `<span style="top:${(h - H0) * PX}px">${h}:00</span>`;
     let html = `<div class="times" style="height:${(H1 - H0) * PX}px">${times}</div>`;
     for (const ds of days) {
       let inner = '';
-      for (const m of Agenda.on(ds)) inner += `<div class="meeting" style="top:${(m.start / 60 - H0) * PX}px;height:${Math.max(18, (m.end - m.start) / 60 * PX)}px"><b>${esc(m.title)}</b>${UI.span(UI.fmt(m.start), UI.fmt(m.end))}</div>`;
+      for (const m of Agenda.on(ds)) inner += `<div class="meeting" style="top:${(m.start / 60 - H0) * PX}px;height:${Math.max(MEETING_MIN_H, (m.end - m.start) / 60 * PX)}px"><b>${esc(m.title)}</b>${UI.span(UI.fmt(m.start), UI.fmt(m.end))}</div>`;
       const blocks = Store.blocksOn(ds);
       for (const b of blocks) {
-        const key = ds + '|' + b.id, ids = Store.idx().inBlock(key);
+        const place = { date: ds, blockId: b.id }, key = M.placeKey(place), ids = Store.idx().tasksIn(place);
         const chips = ids.map(id => {
           const k = Store.task(id); if (!k) return '';
           const bl = Store.idx().of(id).blocks, pos = bl.findIndex(x => x.key === key) + 1;
-          return chip(k, key, { side: part(bl.length, pos) + xBtn(`data-rm="${key}~${id}"`, t('cal.out_of_block')) });
+          return chip(k, place, { side: part(bl.length, pos) + xBtn(`data-unplan="${P(place)}"`, t('cal.out_of_block')) });
         }).join('');
-        inner += `<div class="block" data-block="${key}" style="top:${(b.start / 60 - H0) * PX}px;height:${(b.end - b.start) / 60 * PX}px">
+        inner += `<div class="block" data-place="${P(place)}" style="top:${(b.start / 60 - H0) * PX}px;height:${(b.end - b.start) / 60 * PX}px">
           <div class="bh">${b.label ? `<span>${esc(b.label)}</span>` : ''}<span>${UI.span(UI.fmt(b.start), UI.fmt(b.end))}</span></div>
           <div class="list">${chips || `<div class="empty">${t('cal.drop_here')}</div>`}</div></div>`;
       }
@@ -161,23 +165,22 @@ const Calendar = (() => {
   function renderCycleView() {
     const win = cycleWindow(), tpl = win.map(o => `minmax(150px,${o.weight}fr)`).join(' ');
     const head = win.map(o => `<div class="${td() >= o.start && td() <= o.end ? 'today' : ''}">${UI.fmtDay(o.start)}<small>${t('time.until', { z: UI.fmtSp(o.end) })}</small></div>`).join('');
-    const chipHtml = (id, src, dated, per) => {
+    // A task of the period itself, or a task on one or more blocks in it (shown once, with its days).
+    const ownChip = (id, per) => { const k = Store.task(id); return k ? chip(k, periodPlace(per), { side: cyPart(id, per.key) + xBtn(`data-unplan="${P(periodPlace(per))}"`, t('cal.out_of_period')) }) : ''; };
+    const datedChip = (id, from, per) => {
       const k = Store.task(id); if (!k) return '';
-      const mine = dated ? Store.idx().of(id).blocks.filter(b => b.date >= per.start && b.date <= per.end) : [];
-      const day = mine.length ? `<div class="meta"><div class="mrow plan"><span class="k">${t(mine.length > 1 ? 'meta.days' : 'meta.day')}</span><span class="v">${mine.map(b => `${UI.fmtDay(b.date)} · ${UI.span(UI.fmt(b.start), UI.fmt(b.end))}`).join('<br>')}</span></div></div>` : '';
-      return chip(k, src, {
-        side: (dated ? '' : cyPart(id, per.key)) + xBtn(dated ? `data-rmall="${pkey(per)}~${id}"` : `data-rm="${src}~${id}"`, t(dated ? (mine.length > 1 ? 'cal.out_of_blocks' : 'cal.out_of_block') : 'cal.out_of_period')),
-        after: day, extra: dated ? ` data-srcp="${pkey(per)}"` : ''
-      });
+      const mine = Store.idx().of(id).blocks.filter(b => b.date >= per.start && b.date <= per.end);
+      const day = `<div class="meta"><div class="mrow plan"><span class="k">${t(mine.length > 1 ? 'meta.days' : 'meta.day')}</span><span class="v">${mine.map(b => `${UI.fmtDay(b.date)} · ${UI.span(UI.fmt(b.start), UI.fmt(b.end))}`).join('<br>')}</span></div></div>`;
+      return chip(k, from, { side: xBtn(`data-unplan-days="${per.key}"`, t(mine.length > 1 ? 'cal.out_of_blocks' : 'cal.out_of_block')), after: day, fromPeriod: per.key });
     };
     const cols = win.map(o => {
       // first the period's own tasks (free to order), then the tasks on a block (fixed on their day)
       const first = new Map();
-      for (let d = o.start; d <= o.end; d = M.addDays(d, 1)) for (const b of Store.blocksOn(d)) for (const id of Store.idx().inBlock(d + '|' + b.id)) if (!first.has(id)) first.set(id, d + '|' + b.id);
-      const dated = [...first].map(([id, src]) => chipHtml(id, src, true, o));
-      const own = Store.idx().inPeriod(o.key).map(id => chipHtml(id, pkey(o), false, o)).join('');
+      for (let d = o.start; d <= o.end; d = M.addDays(d, 1)) for (const b of Store.blocksOn(d)) { const pl = { date: d, blockId: b.id }; for (const id of Store.idx().tasksIn(pl)) if (!first.has(id)) first.set(id, pl); }
+      const dated = [...first].map(([id, from]) => datedChip(id, from, o));
+      const own = Store.idx().tasksIn(periodPlace(o)).map(id => ownChip(id, o)).join('');
       const body = (own ? `<div class="cyown">${own}</div>` : '') + (dated.length && own ? `<div class="cysep">${t('cal.on_fixed_days')}</div>` : '') + (dated.length ? `<div class="cydated">${dated.join('')}</div>` : '');
-      return `<div class="cycol ${td() >= o.start && td() <= o.end ? 'today' : ''}"><div class="cyblock" data-block="${pkey(o)}">${body || `<div class="empty">${t('cal.drop_here')}</div>`}</div></div>`;
+      return `<div class="cycol ${td() >= o.start && td() <= o.end ? 'today' : ''}"><div class="cyblock" data-place="${P(periodPlace(o))}">${body || `<div class="empty">${t('cal.drop_here')}</div>`}</div></div>`;
     }).join('');
     $('cycleView').innerHTML = `<div class="cyhead" style="--n:${win.length};grid-template-columns:${tpl}">${head}</div><div class="cybody" style="--n:${win.length};grid-template-columns:${tpl}">${cols}</div>`;
     cyHintSync();
@@ -208,14 +211,14 @@ const Calendar = (() => {
     pers.forEach(o => ev.push({ pos: o.start, per: o, type: 1, key: o.key }));
     ev.sort((a, b) => (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : a.type - b.type || (a.date || '').localeCompare(b.date || '')));
     const dayHtml = d => {
-      const ids = [...new Set(Store.blocksOn(d).flatMap(b => I.inBlock(d + '|' + b.id)))].filter(ok);
+      const ids = [...new Set(Store.blocksOn(d).flatMap(b => I.tasksIn({ date: d, blockId: b.id })))].filter(ok);
       return `<div class="lgrp"><h4 class="${d === td() ? 'today' : ''}">${UI.fmtDay(d)}${d === td() ? `<span>${t('cal.today_small')}</span>` : ''}</h4><div class="list-tasks">${ids.map(card).join('')}</div></div>`;
     };
     let html = '', i = 0;
     while (i < ev.length) {
       const o = ev[i].per, grp = [], same = e => (o ? !!e.per && e.per.key === o.key : !e.per);
       while (i < ev.length && same(ev[i])) { grp.push(ev[i]); i++; }
-      const inner = grp.map(e => (e.type === 0 ? dayHtml(e.date) : `<div class="lgrp"><h4>${t('cal.whole_period')}</h4><div class="list-tasks">${I.inPeriod(e.key).filter(ok).map(card).join('')}</div></div>`)).join('');
+      const inner = grp.map(e => (e.type === 0 ? dayHtml(e.date) : `<div class="lgrp"><h4>${t('cal.whole_period')}</h4><div class="list-tasks">${I.tasksIn({ period: e.key }).filter(ok).map(card).join('')}</div></div>`)).join('');
       html += o ? `<section class="lsec per"><h3>${t('meta.period')} ${spanText(o)}${td() >= o.start && td() <= o.end ? `<small>${t('cal.running')}</small>` : ''}</h3>${inner}</section>` : `<section class="lsec">${inner}</section>`;
     }
     const bk = Store.itemsOf('backlog', UI.passes);
@@ -235,23 +238,29 @@ const Calendar = (() => {
     wv.classList.toggle('daymode', View.mode === 'day');
     wv.classList.toggle('wkmode', View.mode === 'week' || View.mode === 'workweek');
     if (inCy && !Store.periodAt(View.date)) View.date = Store.segments()[0].from;
-    closePop();   // before the views are redrawn: the open card lives in a column that is about to be replaced
+    // An open card lives in a column that is about to be replaced: it closes first. A mark after a
+    // jump has no card and stays.
+    if (card) closePop(true);
     Agenda.ensure(View.mode === 'cycle' || View.mode === 'list' ? [] : calDays());
     renderBar();
-    if (inCy) renderCycleView();
-    else if (View.mode === 'list') renderListView();
-    else renderWeek();
+    // Only the view on screen has content; the others are emptied, not left hidden.
+    const inList = View.mode === 'list';
+    if (inCy) renderCycleView(); else $('cycleView').innerHTML = '';
+    if (inList) renderListView(); else $('listView').innerHTML = '';
+    if (!inCy && !inList) renderWeek(); else ['head', 'body', 'cycleLane'].forEach(id => { $(id).innerHTML = ''; });
     reapplyFocus();
   }
 
   /* ---------- the open task ---------- */
 
   // Click on a task in the calendar: a card with everything, the rest dims, the sidebar shows the task
-  // and remembers where it was. focusHost: after a jump, only the task in that block or period is marked.
+  // and remembers where it was. focusHost: after a jump, only the task in that place is marked.
+  const CARD_MIN_W = 270, CARD_EDGE = 6;   // the card is at least this wide, and stays this far from the edge
   let focusId = null, focusHost = null, savedSide = null, jumpHold = null;
   // The open card exists only while it is open: opening makes it, closing removes it. It sits in the day
   // column so it scrolls with the day; when the calendar is redrawn it is closed first.
   let card = null;
+  // restore: put the sidebar back as it was before the card opened.
   function closePop(restore = false) {
     const was = focusId !== null;
     jumpHold = null;
@@ -259,20 +268,22 @@ const Calendar = (() => {
     focusId = null; reapplyFocus();
     if (was && restore && savedSide) Tasks.restoreSide(savedSide);
     savedSide = null;
+    return was;
   }
   function openPop(el) {
     const id = el.dataset.task, k = Store.task(id); if (!k) return;
     if (card) card.remove();
-    const bl = Store.idx().of(id).blocks;
+    const bl = Store.idx().of(id).blocks, from = M.parsePlace(el.dataset.from);
+    const others = bl.filter(b => !M.samePlace(b.place, from));
     card = document.createElement('div');
     card.id = 'pop'; card.setAttribute('style', UI.taskStyle(k)); card.dataset.task = id;
     card.innerHTML = `<div class="pt">${UI.chk(k)}<b>${esc(k.title)}</b>${UI.whoHtml(k)}<button type="button" class="pen" data-edit="${id}" title="${t('task.edit')}">✎</button></div>
       ${k.note ? `<div class="pd">${esc(k.note)}</div>` : ''}${UI.metaLine(k)}
-      ${bl.length > 1 ? `<div class="pn"><div class="k">${t('pop.also_on')}</div>${bl.filter(b => b.key !== el.dataset.src).map(b => `<div class="pr"><span class="pday">${UI.fmtDay(b.date)}</span><span>${UI.span(UI.fmt(b.start), UI.fmt(b.end))}</span></div>`).join('')}</div>` : ''}`;
+      ${bl.length > 1 ? `<div class="pn"><div class="k">${t('pop.also_on')}</div>${others.map(b => `<div class="pr"><span class="pday">${UI.fmtDay(b.date)}</span><span>${UI.span(UI.fmt(b.start), UI.fmt(b.end))}</span></div>`).join('')}</div>` : ''}`;
     const col = el.closest('.col') || el.closest('.cycles') || el.closest('.cyblock'), colR = col.getBoundingClientRect(), r = el.getBoundingClientRect();
-    const wr = $('weekView').getBoundingClientRect(), w = Math.max(r.width, 270);
+    const wr = $('weekView').getBoundingClientRect(), w = Math.max(r.width, CARD_MIN_W);
     let left = r.left - colR.left;
-    const over = r.left + w - (wr.right - 6); if (over > 0) left -= over;
+    const over = r.left + w - (wr.right - CARD_EDGE); if (over > 0) left -= over;
     card.style.width = w + 'px'; card.style.left = left + 'px'; card.style.top = (r.top - colR.top) + 'px';
     col.appendChild(card);
   }
@@ -282,7 +293,7 @@ const Calendar = (() => {
     document.body.classList.toggle('hov', on);
     if (!on) focusHost = null;
     if (on) document.querySelectorAll(`[data-task="${focusId}"]`).forEach(x => {
-      if (focusHost && x.classList.contains('chip')) { const h = x.closest('[data-block]'); if (h && h.dataset.block !== focusHost) { x.classList.add('same'); return; } }
+      if (focusHost && x.classList.contains('chip')) { const h = x.closest('[data-place]'); if (h && h.dataset.place !== focusHost) { x.classList.add('same'); return; } }
       x.classList.add('hl');
     });
   }
@@ -297,118 +308,62 @@ const Calendar = (() => {
 
   /* ---------- jumping from a Plan line to the calendar ---------- */
 
-  function jump(key, id) {
-    if (View.mode === 'list') View.mode = key.startsWith('cy@') ? 'cycle' : 'workweek';
-    if (key.startsWith('cy@')) {
-      const pr = Store.periodAt(key.slice(3));
-      const visible = View.mode === 'cycle' ? cycleWindow().some(o => pkey(o) === key) : calDays().some(ds => pr && ds >= pr.start && ds <= pr.end);
-      if (pr && !visible) View.date = View.mode === 'cycle' ? pr.start : td() >= pr.start && td() <= pr.end ? td() : pr.start;
-    } else if (View.mode === 'cycle' && Store.periodAt(key.split('|')[0])) {
-      const pr = Store.periodAt(key.split('|')[0]);
-      if (!cycleWindow().some(o => o.key === pr.key)) View.date = pr.start;
-    } else { View.date = key.split('|')[0]; if (View.mode === 'cycle') View.mode = 'workweek'; }
+  // To the place a task is planned in, and mark the task there (until the mouse leaves its card).
+  function jump(place, id) {
+    const per = place.period ? Store.periodAt(place.period) : Store.periodAt(place.date);
+    if (View.mode === 'list') View.mode = place.period ? 'cycle' : 'workweek';
+    if (place.period) {
+      const visible = View.mode === 'cycle' ? cycleWindow().some(o => o.key === place.period) : calDays().some(ds => per && ds >= per.start && ds <= per.end);
+      if (per && !visible) View.date = View.mode === 'cycle' ? per.start : td() >= per.start && td() <= per.end ? td() : per.start;
+    } else if (View.mode === 'cycle' && per) {
+      if (!cycleWindow().some(o => o.key === per.key)) View.date = per.start;
+    } else { View.date = place.date; if (View.mode === 'cycle') View.mode = 'workweek'; }
     View.save();
     if (View.page !== 'tasks') App.show('tasks');
     App.navigated(); render();
-    const hostKey = View.mode === 'cycle' && !key.startsWith('cy@') ? pkey(Store.periodAt(key.split('|')[0])) : key;
-    const el = document.querySelector(`[data-block="${hostKey}"] [data-task="${id}"]`);
+    // in the period view a task on a block is shown in its period's column
+    const host = P(View.mode === 'cycle' && !place.period ? periodPlace(per) : place);
+    const el = document.querySelector(`[data-place="${host}"] [data-task="${id}"]`);
     if (el) {
       const r = el.getBoundingClientRect();
       if (r.top < 0 || r.bottom > innerHeight) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      focusId = id; jumpHold = id; focusHost = hostKey; reapplyFocus();   // stays until the mouse leaves the card
+      focusId = id; jumpHold = id; focusHost = host; reapplyFocus();
     }
   }
 
-  /* ---------- dragging ---------- */
+  /* ---------- dropping on blocks and periods ---------- */
 
-  // The shared drag state; the Inbox has its own drop targets but uses this to know what is dragged.
-  let drag = null;
-  const SORTABLE = ['open', 'backlog'];
-  let dropMark = null, springKey = null, springTimer = null;
-  const dragging = () => drag;
-  function clearMarks() { document.querySelectorAll('.ins-before,.ins-after').forEach(x => x.classList.remove('ins-before', 'ins-after')); dropMark = null; }
-  function clearSpring() { clearTimeout(springTimer); springTimer = null; springKey = null; }
-  function dragReset() { drag = null; clearMarks(); clearSpring(); document.body.classList.remove('dragging-any'); document.querySelectorAll('.dragging,.over').forEach(x => x.classList.remove('dragging', 'over')); }
-  const dropTarget = e => e.target.closest && (e.target.closest('.dz') || e.target.closest('.cycle') || e.target.closest('.cyblock') || e.target.closest('.block') || e.target.closest('#tasks .sec:not([data-list="planned"]):not([data-list="done"])') || e.target.closest('#tasks .sec[data-list="done"]'));
-  // Where in a sidebar list: on a card (upper or lower half), on the head (before the first), below (after the last).
-  function markFor(e, sec) {
-    const cards = [...sec.querySelectorAll('.task')].filter(c => c.dataset.task !== drag.task);
-    if (!cards.length) return null;
-    const card = e.target.closest('.task');
-    if (card && card.dataset.task !== drag.task) { const r = card.getBoundingClientRect(); return { id: card.dataset.task, after: e.clientY > r.top + r.height / 2, el: card }; }
-    if (card) return null;
-    if (e.target.closest('.sh')) return { id: cards[0].dataset.task, after: false, el: cards[0] };
-    return { id: cards[cards.length - 1].dataset.task, after: true, el: cards[cards.length - 1] };
-  }
   // Where in a block or period: between two tasks (the top one is the most important).
-  function markForChips(e, blk) {
-    const chips = [...blk.querySelectorAll(blk.querySelector('.cydated,.cyown') ? '.cyown .chip' : '.chip')].filter(c => c.dataset.task !== drag.task);
+  function spotIn(e, host, drag) {
+    const chips = [...host.querySelectorAll(host.querySelector('.cydated,.cyown') ? '.cyown .chip' : '.chip')].filter(c => c.dataset.task !== drag.task);
     if (!chips.length) return null;
-    if (blk.classList.contains('cycle')) {   // side by side: the nearest task, left or right of it
-      let best = null, bd = 1e9;
+    if (host.classList.contains('cycle')) {   // side by side: the nearest task; rows count double, so one in the same row wins
+      let best = null, bd = Infinity;
       for (const c of chips) { const r = c.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, d = Math.hypot(e.clientX - cx, (e.clientY - cy) * 2); if (d < bd) { bd = d; best = { c, cx }; } }
-      return { id: best.c.dataset.task, after: e.clientX > best.cx, el: best.c };
+      return { el: best.c, after: e.clientX > best.cx };
     }
-    const c = e.target.closest('.cyown .chip, .chip');
-    if (c && c.dataset.task !== drag.task && chips.includes(c)) { const r = c.getBoundingClientRect(); return { id: c.dataset.task, after: e.clientY > r.top + r.height / 2, el: c }; }
+    const c = e.target.closest('.chip');
+    if (c && c.dataset.task !== drag.task && chips.includes(c)) { const r = c.getBoundingClientRect(); return { el: c, after: e.clientY > r.top + r.height / 2 }; }
     if (c) return null;
-    const first = chips[0].getBoundingClientRect();
-    if (e.clientY < first.top) return { id: chips[0].dataset.task, after: false, el: chips[0] };
-    return { id: chips[chips.length - 1].dataset.task, after: true, el: chips[chips.length - 1] };
+    if (e.clientY < chips[0].getBoundingClientRect().top) return { el: chips[0], after: false };
+    return { el: chips[chips.length - 1], after: true };
   }
-  // A task on a block is fixed among the other dated tasks of its period: dropping there does nothing.
-  function sameDated(e, tg) {
-    if (!drag || !tg.classList.contains('cyblock') || !e.target.closest('.cydated') || !drag.src.includes('|')) return false;
-    const pr = Store.periodAt(drag.src.split('|')[0]); return !!pr && pkey(pr) === tg.dataset.block;
+  // A task on a block is fixed among the other dated tasks of its period: dropping it there does nothing.
+  function amongItsDated(e, host, drag) {
+    if (!host.classList.contains('cyblock') || !e.target.closest('.cydated') || !drag.from || drag.from.period) return false;
+    const pr = Store.periodAt(drag.from.date), to = M.parsePlace(host.dataset.place);
+    return !!pr && M.samePlace(periodPlace(pr), to);
   }
-  const toKey = k => (k && k.startsWith('cy@') ? k.slice(3) : k);
-
-  function initDrag() {
-    document.addEventListener('dragstart', e => {
-      const el = e.target.closest && e.target.closest('[data-task]'); if (!el) return;
-      drag = { task: el.dataset.task, src: el.dataset.src, srcp: el.dataset.srcp };   // first, so a later problem can't leave an old drag behind
-      closePop();
-      e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', drag.task);
-      setTimeout(() => { el.classList.add('dragging'); document.body.classList.add('dragging-any'); }, 0);
-    });
-    document.addEventListener('dragend', dragReset);
-    document.addEventListener('dragover', e => {
-      if (View.page === 'inbox') { clearMarks(); clearSpring(); return; }
-      const tg = dropTarget(e);
-      if (tg && drag && sameDated(e, tg)) { clearMarks(); document.querySelectorAll('.over').forEach(x => x.classList.remove('over')); return; }
-      if (!tg || !drag) { clearMarks(); clearSpring(); return; }
-      e.preventDefault();
-      document.querySelectorAll('.over').forEach(x => { if (x !== tg) x.classList.remove('over'); });
-      tg.classList.add('over'); clearMarks();
-      // A closed list opens when you hover over it with a task; dropping without waiting works too.
-      if (tg.dataset.list && tg.classList.contains('closed')) {
-        if (springKey !== tg.dataset.list) {
-          clearSpring(); springKey = tg.dataset.list;
-          springTimer = setTimeout(() => { if (drag) Tasks.springOpen(springKey); springKey = null; }, 500);
-        }
-      } else clearSpring();
-      if (tg.dataset.list && SORTABLE.includes(tg.dataset.list)) { const m = markFor(e, tg); if (m) { dropMark = { id: m.id, after: m.after }; m.el.classList.add(m.after ? 'ins-after' : 'ins-before'); } }
-      else if (tg.dataset.block) { const m = markForChips(e, tg); if (m) { dropMark = { id: m.id, after: m.after }; m.el.classList.add(m.after ? 'ins-after' : 'ins-before'); } }
-    });
-    document.addEventListener('drop', async e => {
-      const tg = dropTarget(e);
-      if (!tg || !drag || View.page === 'inbox') return;
-      e.preventDefault();
-      const d = drag, mark = dropMark;
-      dragReset();
-      if (sameDated(e, tg)) return;
-      let res;
-      if (tg.dataset.dropdock || tg.dataset.list) {
-        const list = tg.dataset.dropdock || tg.dataset.list;
-        res = await UI.act(() => Store.moveToList(d.task, list, SORTABLE.includes(list) ? mark : null));
-      } else {
-        const key = tg.dataset.block;
-        const target = key.startsWith('cy@') ? { period: key.slice(3) } : { date: key.split('|')[0], blockId: key.split('|')[1] };
-        res = await UI.act(() => Store.plan(d.task, target, d.src === 'new' ? 'new' : toKey(d.src), d.srcp ? d.srcp.slice(3) : null, mark));
-      }
+  const placeZone = {
+    find: el => el.closest('#weekView [data-place]'),
+    accepts: d => { const k = Store.task(d.task); return !!k && k.stage !== 'inbox'; },
+    over: (e, host, d) => (amongItsDated(e, host, d) ? false : spotIn(e, host, d)),
+    async drop(host, d, spot) {
+      const mark = spot ? { id: spot.el.dataset.task, after: spot.after } : null;
+      const res = await UI.act(() => Store.plan(d.task, M.parsePlace(host.dataset.place), { from: d.from, fromPeriod: d.fromPeriod, mark }));
       if (res) Tasks.notes(res.notes, d.task);
-    });
-  }
+    }
+  };
 
   /* ---------- clicks ---------- */
 
@@ -421,15 +376,15 @@ const Calendar = (() => {
       // a button elsewhere stops the focus and leaves the sidebar; a click in the calendar puts it back
       closePop(!ctl && !e.target.closest('.side') && !!e.target.closest('#weekView'));
     });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closePop(true); });
+    UI.onEscape(() => closePop(true));
     document.addEventListener('scroll', e => { if (e.target.classList && e.target.classList.contains('list')) closePop(true); }, true);
     document.addEventListener('click', async e => {
-      const g = e.target.closest('[data-goblock]');
-      if (g) { jump(g.dataset.goblock, g.dataset.gotask); return; }
-      const rma = e.target.closest('[data-rmall]');
-      if (rma) { const [per, id] = rma.dataset.rmall.split('~'); await UI.act(() => Store.unplanBlocksInPeriod(per.slice(3), id)); return; }
-      const rm = e.target.closest('[data-rm]');
-      if (rm) { const [key, id] = rm.dataset.rm.split('~'); await UI.act(() => (key.startsWith('cy@') ? Store.unplanPeriod(key.slice(3), id) : Store.unplanBlock(key, id))); }
+      const g = e.target.closest('[data-goto]');
+      if (g) { jump(M.parsePlace(g.dataset.goto), g.dataset.gotask); return; }
+      const ud = e.target.closest('[data-unplan-days]');
+      if (ud) { await UI.act(() => Store.unplanBlocksInPeriod(ud.dataset.unplanDays, ud.closest('[data-task]').dataset.task)); return; }
+      const un = e.target.closest('[data-unplan]');
+      if (un) await UI.act(() => Store.unplan(M.parsePlace(un.dataset.unplan), un.closest('[data-task]').dataset.task));
     });
     document.addEventListener('mousemove', e => {
       if (jumpHold === null) return;
@@ -473,10 +428,23 @@ const Calendar = (() => {
 
   // Day, Werkweek and Week follow your finger: left for the next day or week, right for the previous.
   // Past a quarter of the screen (or a fast swipe) it changes, otherwise it springs back.
+  const SWIPE = {
+    lockPx: 10,          // movement before deciding between swiping and scrolling
+    sideways: 1.3,       // a swipe: at least this much more sideways than up or down
+    follow: 0.9,         // the view moves a bit less than the finger, so it feels attached, not loose
+    fadeMin: 0.35,       // the view fades while it moves, to this opacity at most
+    fadeOver: 1.4,       // ... over this many screen widths
+    changeAt: 0.25,      // part of the screen width that changes the day or week
+    fastPxPerMs: 0.5,    // a fast flick also changes it ...
+    fastMinPx: 40,       // ... once it has moved this far
+    outPart: 0.7,        // the old view leaves this far, the new one comes in from inPart
+    inPart: 0.25,
+    ms: 170              // the length of one leg of the slide
+  };
   function initSwipe() {
     const wv = $('weekView'), coarse = () => matchMedia('(pointer:coarse)').matches;
     const els = () => ['head', 'body'].map($);
-    const setX = (x, animate, op) => els().forEach(el => { el.style.transition = animate ? 'transform .17s ease-out, opacity .17s ease-out' : 'none'; el.style.transform = x ? `translateX(${x}px)` : ''; el.style.opacity = op == null ? '' : op; });
+    const setX = (x, animate, op) => els().forEach(el => { el.style.transition = animate ? `transform ${SWIPE.ms}ms ease-out, opacity ${SWIPE.ms}ms ease-out` : 'none'; el.style.transform = x ? `translateX(${x}px)` : ''; el.style.opacity = op == null ? '' : op; });
     let g = null;
     wv.addEventListener('touchstart', e => {
       g = (e.touches.length === 1 && coarse() && ['day', 'workweek', 'week'].includes(View.mode) && !e.target.closest('#cycleLane, input, select, textarea, .calbar, .gp, dialog, #pop'))
@@ -484,22 +452,26 @@ const Calendar = (() => {
     }, { passive: true });
     wv.addEventListener('touchmove', e => {
       if (!g) return; const tt = e.touches[0], dx = tt.clientX - g.x, dy = tt.clientY - g.y;
-      if (!g.lock && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) g.lock = Math.abs(dx) > 1.3 * Math.abs(dy) ? 'h' : 'v';
-      if (g.lock === 'h') { g.dx = dx; setX(dx * 0.9, false, Math.max(0.35, 1 - Math.abs(dx) / (wv.clientWidth * 1.4))); }
+      if (!g.lock && (Math.abs(dx) > SWIPE.lockPx || Math.abs(dy) > SWIPE.lockPx)) g.lock = Math.abs(dx) > SWIPE.sideways * Math.abs(dy) ? 'h' : 'v';
+      if (g.lock === 'h') { g.dx = dx; setX(dx * SWIPE.follow, false, Math.max(SWIPE.fadeMin, 1 - Math.abs(dx) / (wv.clientWidth * SWIPE.fadeOver))); }
     }, { passive: true });
     wv.addEventListener('touchend', () => {
       if (!g || g.lock !== 'h') { g = null; return; }
-      const dx = g.dx, w = wv.clientWidth, fast = Math.abs(dx) / Math.max(1, Date.now() - g.at) > 0.5; g = null;
+      const dx = g.dx, w = wv.clientWidth, fast = Math.abs(dx) / Math.max(1, Date.now() - g.at) > SWIPE.fastPxPerMs; g = null;
       const btn = $(dx < 0 ? 'calNext' : 'calPrev');
-      if (btn.disabled || !(Math.abs(dx) > w * 0.25 || (fast && Math.abs(dx) > 40))) { setX(0, true); return; }
+      if (btn.disabled || !(Math.abs(dx) > w * SWIPE.changeAt || (fast && Math.abs(dx) > SWIPE.fastMinPx))) { setX(0, true); return; }
       const dir = dx < 0 ? -1 : 1;
-      setX(dir * w * 0.7, true, 0);
-      setTimeout(() => { btn.click(); setX(-dir * w * 0.25, false, 0); void wv.offsetWidth; setX(0, true, 1); }, 160);
+      setX(dir * w * SWIPE.outPart, true, 0);
+      setTimeout(() => { btn.click(); setX(-dir * w * SWIPE.inPart, false, 0); void wv.offsetWidth; setX(0, true, 1); }, SWIPE.ms);
     }, { passive: true });
     wv.addEventListener('touchcancel', () => { if (g && g.lock === 'h') setX(0, true); g = null; }, { passive: true });
   }
 
-  function init() { initBar(); initDrag(); initClicks(); initSwipe(); }
+  function init() {
+    initBar(); initClicks(); initSwipe();
+    Drag.zone(placeZone);
+    Drag.onStart(() => closePop());
+  }
 
-  return { init, render, spanText, closePop, dragging, dragReset, reapplyFocus, calDays };
+  return { init, render, spanText, closePop, reapplyFocus, calDays };
 })();

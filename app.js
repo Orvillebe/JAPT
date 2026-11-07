@@ -13,7 +13,8 @@
  *   data-local.js        - storage in this browser (testing)
  *   data-service.js      - picks the data layer (Supabase on the live address: next build step)
  *   store.js             - data in memory, every action as one save with its undo
- *   ui.js                - shared pieces: view memory, cards, pickers, toast, figures
+ *   ui.js                - shared pieces: view memory, cards, windows, Escape, pickers, toast, figures
+ *   drag.js              - dragging a task: one handler, drop zones per screen
  *   agenda.js            - meetings from the agenda link
  *   calendar.js          - Taken page, right: day, week, period and list views, dragging
  *   tasks.js             - Taken page, left: the lists, the task form, checking off
@@ -48,7 +49,7 @@ const App = (() => {
   }
   function show(page) {
     View.page = page; View.save();
-    Calendar.dragReset(); Calendar.closePop();
+    Drag.end(); Calendar.closePop();
     $('weekView').hidden = page !== 'tasks';
     $('goalsView').hidden = page !== 'goals';
     $('inboxView').hidden = page !== 'inbox';
@@ -59,6 +60,7 @@ const App = (() => {
   }
   function render() {
     if (!started) return;
+    UI.pruneFilter();
     Tasks.render();
     if (View.page === 'tasks') Calendar.render();
     if (View.page === 'goals') Goals.render();
@@ -67,8 +69,8 @@ const App = (() => {
   }
   // Something that arrives by itself (the agenda) never redraws under a drag: it waits until you let go.
   let afterDrag = false;
-  function renderWhenFree() { if (Calendar.dragging()) afterDrag = true; else render(); }
-  document.addEventListener('dragend', () => { if (afterDrag) { afterDrag = false; setTimeout(render, 0); } });
+  function renderWhenFree() { if (Drag.current()) afterDrag = true; else render(); }
+  Drag.onEnd(() => { if (afterDrag) { afterDrag = false; setTimeout(render, 0); } });
   // Saves change memory; draw once afterwards, not once per change.
   function queueRender() { if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; render(); }); }
 
@@ -115,7 +117,7 @@ const App = (() => {
   // Colleagues' changes are loaded when the app opens, when you come back to the tab, and when you move
   // to another day, week or period (docs/design.md, Working at the same time). Never during a drag.
   async function reloadIfStale(force) {
-    if (!started || Calendar.dragging()) return;
+    if (!started || Drag.current()) return;
     if (!force && Date.now() - loadedAt < JAPT_CONFIG.reloadSeconds * 1000) return;
     loadedAt = Date.now();
     try { if (!await checkVersion()) return; await Store.reload(); }

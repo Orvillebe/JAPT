@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=0.1.3">
+<link rel="stylesheet" href="style.css?v=0.2.0">
 <!-- The look is chosen per device in Beheer; set it before the page draws, so it never flashes. -->
 <script>try { var th = localStorage.getItem('japt_theme'); if (th === 'orville' || th === 'neutral') document.documentElement.dataset.theme = th; } catch (e) {}</script>
 </head>
@@ -139,78 +139,30 @@
   <div class="dz" data-dropdock="done" data-i18n="list.done"></div>
 </div>
 
-<dialog id="taskDlg">
-  <form id="taskForm">
-    <h3 id="taskDlgTitle"></h3>
-    <label class="f"><span class="fl" data-i18n="form.task"></span><input type="text" id="newTask" autocomplete="off" data-i18n-placeholder="task.ph"></label>
-    <label class="f"><span class="fl" data-i18n="form.note"></span><textarea id="newDesc"></textarea></label>
-    <label class="f"><span class="fl" id="newTaskGoalLbl"></span><select id="newTaskGoal"></select></label>
-    <label class="f"><span class="fl" data-i18n="form.deadline"></span><input type="date" id="newDeadline"></label>
-    <div class="rephint" id="repHint" hidden></div>
-    <div class="f"><span class="fl" data-i18n="form.who_long"></span><div class="wrow" id="dlgWho"></div></div>
-    <label class="f" id="newListRow"><span class="fl" data-i18n="form.put_in"></span><select id="newList">
-      <option value="open" data-i18n="list.open"></option><option value="backlog" data-i18n="list.backlog"></option></select></label>
-    <div class="btns"><button type="button" id="taskDelete" class="danger" hidden></button><button type="button" id="taskCancel" data-i18n="form.cancel"></button><button type="submit" class="primary" id="taskSubmit"></button></div>
-  </form>
-</dialog>
-
 <div id="toast" role="status" hidden></div>
-
-<dialog id="goalDlg">
-  <form id="goalForm">
-    <h3 id="goalDlgTitle"></h3>
-    <label class="f"><span class="fl" data-i18n="goal.what"></span><input type="text" id="newGoal" autocomplete="off"></label>
-    <label class="f"><span class="fl" data-i18n="form.note"></span><textarea id="newGoalDesc"></textarea></label>
-    <div class="f"><span class="fl" data-i18n="goal.colour_label"></span><div class="swatches" id="goalHues"></div></div>
-    <div class="f"><span class="fl" data-i18n="goal.for_client"></span>
-      <div class="combo">
-        <input type="text" id="newGoalClient" autocomplete="off" data-i18n-placeholder="goal.client_ph">
-        <div class="combolist hidden" id="clientSuggest"></div>
-      </div>
-      <div class="cnote hidden" id="clientNote"></div>
-    </div>
-    <div class="gconf hidden" id="goalDelPanel"></div>
-    <div class="btns" id="goalBtns"><button type="button" id="goalDelete" class="danger" hidden></button><button type="button" id="goalCancel" data-i18n="form.cancel"></button><button type="submit" class="primary" id="goalSubmit"></button></div>
-  </form>
-</dialog>
-
-<dialog id="goalView" class="wide gvw"><div id="gvBody"></div></dialog>
-
-<dialog id="clientDlg">
-  <form id="clientForm">
-    <h3 data-i18n="client.edit"></h3>
-    <label class="f"><span class="fl" data-i18n="client.name"></span><input type="text" id="clientName" autocomplete="off"></label>
-    <div class="cnote hidden err" id="clientErr"></div>
-    <div class="btns"><button type="button" id="clientCancel" data-i18n="form.cancel"></button><button type="submit" class="primary" data-i18n="form.save"></button></div>
-  </form>
-</dialog>
-
-<dialog id="manageDlg" class="wide">
-  <div class="mhead"><h3 data-i18n="manage.button"></h3><button type="button" class="ico" id="manageClose" data-i18n-title="form.close" data-i18n-aria="form.close">✕</button></div>
-  <div id="manageBody"></div>
-</dialog>
 
 <!-- Pinned version: repeating meetings in the agenda (agenda.js). The 1.x build works without a bundler. -->
 <script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js" crossorigin="anonymous"></script>
 <!-- Every local file carries the app version (?v=), so after a release the browser fetches the new files
      instead of mixing cached old ones with new ones. tests/release.test.js checks that they match. -->
-<script src="version.js?v=0.1.3"></script>
-<script src="config.js?v=0.1.3"></script>
-<script src="i18n/nl.js?v=0.1.3"></script>
-<script src="i18n/i18n.js?v=0.1.3"></script>
-<script src="model.js?v=0.1.3"></script>
-<script src="id.js?v=0.1.3"></script>
-<script src="data-local.js?v=0.1.3"></script>
-<script src="data-service.js?v=0.1.3"></script>
-<script src="store.js?v=0.1.3"></script>
-<script src="ui.js?v=0.1.3"></script>
-<script src="agenda.js?v=0.1.3"></script>
-<script src="calendar.js?v=0.1.3"></script>
-<script src="tasks.js?v=0.1.3"></script>
-<script src="goals.js?v=0.1.3"></script>
-<script src="inbox.js?v=0.1.3"></script>
-<script src="manage.js?v=0.1.3"></script>
-<script src="export.js?v=0.1.3"></script>
-<script src="app.js?v=0.1.3"></script>
+<script src="version.js?v=0.2.0"></script>
+<script src="config.js?v=0.2.0"></script>
+<script src="i18n/nl.js?v=0.2.0"></script>
+<script src="i18n/i18n.js?v=0.2.0"></script>
+<script src="model.js?v=0.2.0"></script>
+<script src="id.js?v=0.2.0"></script>
+<script src="data-local.js?v=0.2.0"></script>
+<script src="data-service.js?v=0.2.0"></script>
+<script src="store.js?v=0.2.0"></script>
+<script src="ui.js?v=0.2.0"></script>
+<script src="drag.js?v=0.2.0"></script>
+<script src="agenda.js?v=0.2.0"></script>
+<script src="calendar.js?v=0.2.0"></script>
+<script src="tasks.js?v=0.2.0"></script>
+<script src="goals.js?v=0.2.0"></script>
+<script src="inbox.js?v=0.2.0"></script>
+<script src="manage.js?v=0.2.0"></script>
+<script src="export.js?v=0.2.0"></script>
+<script src="app.js?v=0.2.0"></script>
 </body>
 </html>

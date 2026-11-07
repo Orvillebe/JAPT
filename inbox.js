@@ -15,7 +15,8 @@
 const Inbox = (() => {
   const { $, esc, View } = UI;
   let who = [], recent = [], log = [];
-  const IBMINCOL = 230, IBGAP = 14;
+  const IBMINCOL = 230, IBGAP = 14;   // a client column is at least this wide (px), with this gap
+  const IB_FALLBACK_W = 900;          // the board's width before it is drawn for the first time
   let groups = [];
 
   function badge() { const n = Store.inbox().length; $('ibBadge').textContent = n || ''; $('ibTabBadge').textContent = n || ''; }
@@ -23,7 +24,7 @@ const Inbox = (() => {
   // Clients in as many columns as fit; each block goes into the shortest column, so there are no gaps.
   function layout() {
     const el = $('ibClients'); if (!el) return;
-    const width = el.clientWidth || 900;
+    const width = el.clientWidth || IB_FALLBACK_W;
     const n = Math.max(1, Math.min(groups.length, Math.floor((width + IBGAP) / (IBMINCOL + IBGAP))));
     const cols = Array.from({ length: n }, () => ({ h: 0, html: '' }));
     groups.forEach(g => { const c = cols.reduce((a, b) => (b.h < a.h ? b : a)); c.html += g.html; c.h += g.w; });
@@ -35,7 +36,7 @@ const Inbox = (() => {
     const sel = $('ibGoal'), cur = sel.value;
     sel.innerHTML = UI.goalOptions(t('goal.not_yet'), false, null);
     sel.value = Store.goal(cur) && !Store.goal(cur).achievedOn ? cur : '';
-    UI.gpBuild('ibGoal');
+    UI.gpBuild(sel);
   }
 
   function render() {
@@ -50,7 +51,7 @@ const Inbox = (() => {
     const src = `<div class="sec ibsrc"><div class="sh"><span class="sl">${t('view.inbox')}</span><span class="cnt">${n}</span></div><div class="sb">` +
       (n ? '<div class="list-tasks">' + items.map(k => `<div class="ibitem">${UI.taskCard(k, { extra: `<button type="button" title="${t('form.delete')}" data-ibtrash="${k.id}" aria-label="${t('form.delete')}">${TRASH}</button>`, noPen: true })}</div>`).join('') + '</div>'
         : `<div class="none-msg">${t('inbox.empty')}</div>`) + '</div></div>';
-    const buckets = gid => [['open', 'inbox.to_plan'], ['backlog', 'list.backlog']].map(([l, lab]) => `<button type="button" class="ibbk" data-ibdrop="${l}:${gid}"><span>${t(lab)}</span></button>`).join('');
+    const buckets = gid => [['open', 'inbox.to_plan'], ['backlog', 'list.backlog']].map(([l, lab]) => `<button type="button" class="ibbk" data-ibdrop="${l}" data-ibgoal="${gid}"><span>${t(lab)}</span></button>`).join('');
     const goalCard = g => `<div class="gcard" style="${UI.goalStyle(g)}"><div class="gtop"><b class="gname" title="${esc(g.name)}">${esc(g.name)}</b></div><div class="ibbks">${buckets(g.id)}</div></div>`;
     const open = Store.openGoals();
     const cols = [...Store.clients().map(c => ({ name: c.name, goals: open.filter(g => g.clientId === c.id) })), { name: t('client.intern'), goals: open.filter(g => g.clientId == null) }].filter(x => x.goals.length);
@@ -62,19 +63,27 @@ const Inbox = (() => {
     $('ibUndoBtn').title = last ? t('inbox.undo_title', { title: last.title, what: t('inbox.did.' + last.to) + (last.sub ? ' ' + t('inbox.at', { goal: last.sub }) : '') }) : t('inbox.nothing_to_undo');
   }
 
+  // The fields are emptied only once the task is stored, so nothing typed is lost when saving fails.
+  let adding = false;
   async function add() {
-    const inp = $('ibIn'), title = inp.value.trim(); if (!title) { UI.needField('ibIn', t('form.need_task')); return; }
-    const fields = { title, note: $('ibDesc').value.trim(), goalId: $('ibGoal').value || null, who: who.slice(), deadline: $('ibDeadline').value || null, repeat: $('ibDeadline').dataset.rep || null };
-    inp.value = ''; $('ibDesc').value = ''; $('ibGoal').value = ''; UI.setDeadline('ibDeadline', '', ''); who = [];
+    if (adding) return;
+    const inp = $('ibIn'), dl = $('ibDeadline');
+    const fields = { title: inp.value.trim(), note: $('ibDesc').value.trim(), goalId: $('ibGoal').value || null, who: who.slice(), deadline: dl.value || null, repeat: dl.dataset.rep || null };
+    if (UI.showProblems(Store.taskProblems(fields, 'inbox'), { title: inp })) return;
+    adding = true;
     const res = await UI.act(() => Store.addInboxTask(fields));
-    if (res) recent.push(res.id);
+    adding = false;
+    if (res) {
+      recent.push(res.id);
+      inp.value = ''; $('ibDesc').value = ''; $('ibGoal').value = ''; UI.setDeadline(dl, '', ''); who = [];
+      render();
+    }
     inp.focus();
   }
 
   // One processing step, kept for Ongedaan maken until the page reloads.
   async function process(id, to, goalId) {
     const k = Store.task(id); if (!k) return;
-    if ((to === 'open' || to === 'backlog') && !(goalId || k.goalId)) return;   // planning or backlog needs a goal; checking off doesn't
     const res = await UI.act(() => Store.processInbox(id, to, goalId));
     if (!res) return;
     const g = Store.goal(goalId || k.goalId);
@@ -86,10 +95,11 @@ const Inbox = (() => {
   function init() {
     $('ibForm').onsubmit = e => { e.preventDefault(); add(); };
     $('ibWho').onclick = e => { const b = e.target.closest('[data-iwho]'); if (!b) return; const p = b.dataset.iwho; who = who.includes(p) ? who.filter(x => x !== p) : [...who, p]; drawWho(); };
-    UI.wrapDeadline('ibDeadline');
+    UI.wrapDeadline($('ibDeadline'));
     $('ibUndoBtn').onclick = undoLast;
     $('ibTabs').onclick = e => { const b = e.target.closest('[data-ibtab]'); if (!b) return; View.ibTab = b.dataset.ibtab; View.save(); render(); if (View.ibTab === 'add') $('ibIn').focus(); };
     $('ibRecent').onclick = async e => { const b = e.target.closest('[data-ibdel]'); if (!b) return; recent = recent.filter(x => x !== b.dataset.ibdel); await UI.act(() => Store.binTask(b.dataset.ibdel)); };
+    // Ctrl+Z (Cmd+Z) undoes the last step, while sorting and not typing in a field.
     document.addEventListener('keydown', e => {
       if (View.page !== 'inbox' || View.ibTab !== 'sort') return;
       if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.key.toLowerCase() !== 'z') return;
@@ -104,26 +114,17 @@ const Inbox = (() => {
       const c = e.target.closest('#ibBoard .ibitem .task');
       if (c) Tasks.openEdit(c.dataset.task);   // clicking a task opens the form
     });
-    // Dragging: the shared drag state knows what is dragged; the buckets are the drop targets here.
-    const target = e => e.target.closest && e.target.closest('#inboxView [data-ibdrop]');
-    const isInbox = () => { const d = Calendar.dragging(); return d && Store.task(d.task) && Store.task(d.task).stage === 'inbox'; };
-    document.addEventListener('dragover', e => {
-      const tg = target(e); if (!tg || !isInbox()) return;
-      e.preventDefault();
-      iv.querySelectorAll('.over').forEach(x => { if (x !== tg) x.classList.remove('over'); });
-      tg.classList.add('over');
+    // The buckets on the goals are the drop zone for Inbox tasks (drag.js).
+    Drag.zone({
+      find: el => el.closest('#inboxView [data-ibdrop]'),
+      accepts: d => { const k = Store.task(d.task); return !!k && k.stage === 'inbox'; },
+      over: () => null,
+      drop: (tg, d) => process(d.task, tg.dataset.ibdrop, tg.dataset.ibgoal)
     });
-    document.addEventListener('drop', e => {
-      const tg = target(e); if (!tg || !isInbox()) return;
-      e.preventDefault();
-      const id = Calendar.dragging().task, [to, gid] = tg.dataset.ibdrop.split(':');
-      Calendar.dragReset();   // the dragged card leaves the board, so dragend won't come
-      process(id, to, gid);
-    });
-    iv.addEventListener('dragleave', e => { const tg = target(e); if (tg && !tg.contains(e.relatedTarget)) tg.classList.remove('over'); });
     window.addEventListener('resize', () => { if (View.page === 'inbox' && View.ibTab === 'sort') layout(); });
     // phone: the hint "Meer velden hieronder" goes once the end of the form is in view
-    const syncMore = () => { const f = $('ibForm'); if (!f || !f.offsetParent) return; const r = f.querySelector('.ibextra').getBoundingClientRect(); f.querySelector('.ibsubmit').classList.toggle('more', r.bottom > innerHeight - 20); };
+    const MORE_MARGIN = 20;   // px: the end of the form counts as in view a little before the screen edge
+    const syncMore = () => { const f = $('ibForm'); if (!f || !f.offsetParent) return; const r = f.querySelector('.ibextra').getBoundingClientRect(); f.querySelector('.ibsubmit').classList.toggle('more', r.bottom > innerHeight - MORE_MARGIN); };
     addEventListener('scroll', syncMore, { passive: true }); addEventListener('resize', syncMore);
     setTimeout(syncMore, 0);
   }

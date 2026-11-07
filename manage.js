@@ -11,6 +11,8 @@
  *   - Prullenbak: what was deleted in the last days, to put back
  *   - Weergave: the look on this device.  Back-up: backup and analysis export, and the versions
  *
+ * The window is made when it opens and removed when it closes. Redrawing a tab after a change keeps
+ * the field you are in. What may be saved is the Store's to say (Store ...Problems).
  * The rules are in docs/design.md (Work blocks, Work period, Users, Meetings, Bin).
  */
 
@@ -18,18 +20,31 @@ const Manage = (() => {
   const M = Model, { $, esc, cap } = UI;
   const TABS = ['blocks', 'cycles', 'deadlines', 'week', 'users', 'agenda', 'bin', 'look', 'backup'];
   let tab = 'blocks', err = '', selBlock = null, copyTo = [], confirmDel = null, bin = null;
-  const dlg = () => $('manageDlg'), body = () => $('manageBody');
+  let win = null;   // the open window, or null
+  const body = () => win.querySelector('[data-mbody]');
   const td = () => M.today();
-  const PALETTE = ['#cf6a52', '#4f80bd', '#4f9d6b', '#b07cc6', '#d1a03a', '#3fa0a8', '#c25b8a', '#7a7f8c'];
 
-  const timeOpts = cur => { const hs = []; for (let m = 5 * 60; m <= 23 * 60 + 45; m += 15) hs.push(m); if (!hs.includes(cur)) hs.push(cur); hs.sort((x, y) => x - y); return hs.map(m => `<option value="${M.hhmm2(m)}" ${m === cur ? 'selected' : ''}>${M.hhmm2(m)}</option>`).join(''); };
+  // The time lists of a block: from early morning to late evening, per quarter (blocks snap to quarters).
+  // A block outside that range keeps its own time in the list.
+  const TIME_FIRST = 5 * 60, TIME_LAST = 23 * 60 + 45;
+  const timeOpts = cur => {
+    const ms = []; for (let m = TIME_FIRST; m <= TIME_LAST; m += M.SNAP) ms.push(m);
+    if (!ms.includes(cur)) ms.push(cur);
+    return ms.sort((x, y) => x - y).map(m => `<option value="${M.hhmm2(m)}" ${m === cur ? 'selected' : ''}>${M.hhmm2(m)}</option>`).join('');
+  };
+  // The week grid shows the calendar's usual day (config.js dayStart-dayEnd) with an hour of room on
+  // either side to drag a block just outside it, and widens for blocks beyond that.
+  const GRID_MARGIN_H = 1, GRID_PX_PER_H = 30, DRAG_START_PX = 4;
+  let grid = { lo: JAPT_CONFIG.dayStart - GRID_MARGIN_H, px: GRID_PX_PER_H };
   const cur = day => M.currentBlocks(Store.blocks(), day);
 
   /* ---------- tabs ---------- */
 
   function blocksTab() {
     const all = cur();
-    const lo = Math.min(7, Math.floor(Math.min(...all.map(x => x.start / 60), 99))), hi = Math.max(19, Math.ceil(Math.max(...all.map(x => x.end / 60), 0))), PXH = 30;
+    const lo = Math.max(0, Math.min(JAPT_CONFIG.dayStart - GRID_MARGIN_H, Math.floor(Math.min(...all.map(x => x.start / 60), 24))));
+    const hi = Math.min(24, Math.max(JAPT_CONFIG.dayEnd + GRID_MARGIN_H, Math.ceil(Math.max(...all.map(x => x.end / 60), 0)))), PXH = GRID_PX_PER_H;
+    grid = { lo, px: PXH };
     const axis = Array.from({ length: hi - lo }, (_, i) => `<span style="top:${i * PXH}px">${lo + i}</span>`).join('');
     const clr = day => (cur(day).length ? `<button type="button" class="wkclr ${confirmDel === 'day' + day ? 'on' : ''}" data-dayclear="${day}" title="${t('blocks.clear_title')}">${t('blocks.clear')}</button>` : '<div class="wkclr"></div>');
     const cols = M.weekOrder().map(day => {
@@ -58,7 +73,7 @@ const Manage = (() => {
     }
     return `<div class="msec big">${t('blocks.title')}</div><p class="mhint">${t('blocks.hint')}</p>
       <p class="mhow">${t('blocks.how')}</p>
-      <div class="wk" data-lo="${lo}" data-px="${PXH}"><div class="wkax"><div class="wkh">&nbsp;</div><div class="wkaxi" style="height:${(hi - lo) * PXH}px">${axis}</div></div>${cols}</div>${dayPanel}${edit}`;
+      <div class="wk"><div class="wkax"><div class="wkh">&nbsp;</div><div class="wkaxi" style="height:${(hi - lo) * PXH}px">${axis}</div></div>${cols}</div>${dayPanel}${edit}`;
   }
 
   function cyclesTab() {
@@ -90,12 +105,12 @@ const Manage = (() => {
         <button type="button" class="mdel ${conf ? 'confirm' : ''}" data-udel="${u.id}">${conf ? (n ? UI.tn('users.sure_tasks', n) : t('form.sure')) : t('form.delete')}</button></div>`;
     }).join('');
     // With logins, people are invited in Supabase; here only name and colour (docs/design.md, Users).
-    const addForm = DataService.needsLogin ? `<p class="mhint">${t('users.invite_hint')}</p>` : `<form class="madd" id="mUserForm"><input type="text" id="mUserName" placeholder="${t('users.new_ph')}" autocomplete="off"><button type="submit" class="primary">${t('users.add')}</button></form>`;
+    const addForm = DataService.needsLogin ? `<p class="mhint">${t('users.invite_hint')}</p>` : `<form class="madd" id="mUserForm"><div class="f"><input type="text" id="mUserName" placeholder="${t('users.new_ph')}" autocomplete="off"></div><button type="submit" class="primary">${t('users.add')}</button></form>`;
     return `<div class="msec big">${t('users.title')}</div><p class="mhint">${t('users.hint')}</p>` + (rows ? `<div class="mlist">${rows}</div>` : `<div class="mempty">${t('users.none')}</div>`) + addForm;
   }
 
   const agendaTab = () => `<div class="msec big">${t('agenda.title')}</div><p class="mhint">${t('agenda.hint')}</p>
-    <form class="madd" id="mAgendaForm"><input type="url" id="mAgendaUrl" value="${esc(Store.calendarUrl())}" placeholder="https://…" autocomplete="off" spellcheck="false"><button type="submit" class="primary">${t('form.save')}</button></form>
+    <form class="madd" id="mAgendaForm"><div class="f"><input type="url" id="mAgendaUrl" value="${esc(Store.calendarUrl())}" placeholder="https://…" autocomplete="off" spellcheck="false"></div><button type="submit" class="primary">${t('form.save')}</button></form>
     <p class="mhint">${t('agenda.secret')}</p>
     ${Agenda.failed() ? `<p class="merr">${t('agenda.unreachable_long')}</p>` : ''}`;
 
@@ -114,7 +129,7 @@ const Manage = (() => {
     items.sort((a, b) => (a.at < b.at ? 1 : -1));
     return `<div class="msec big">${t('bin.title')}</div><p class="mhint">${t('bin.hint', { n: JAPT_CONFIG.binDays })}</p>` + (items.length ? `<div class="mlist">${items.map(x => x.html).join('')}</div>` : `<div class="mempty">${t('bin.empty')}</div>`);
   }
-  async function loadBin() { try { bin = await Store.loadBin(); } catch (e) { console.error(e); bin = { goals: [], tasks: [], clients: [] }; } if (tab === 'bin' && dlg().open) render(); }
+  async function loadBin() { try { bin = await Store.loadBin(); } catch (e) { console.error(e); bin = { goals: [], tasks: [], clients: [] }; } if (tab === 'bin' && win) render(); }
 
   function lookTab() {
     const cur = App.theme();
@@ -133,21 +148,33 @@ const Manage = (() => {
       <div class="msec big">${t('version.title')}</div><p class="mhint">${t('version.line', { app: v.app, db: v.db })}</p>`;
   }
 
-  function render() {
-    const views = { blocks: blocksTab, cycles: cyclesTab, deadlines: deadlinesTab, week: weekTab, users: usersTab, agenda: agendaTab, bin: binTab, look: lookTab, backup: backupTab };
-    body().innerHTML = `<div class="seg mtabs mtabbar">${TABS.map(k => `<button type="button" data-mtab="${k}" class="${tab === k ? 'active' : ''}">${t('manage.tab.' + k)}</button>`).join('')}</div>`
-      + `<div class="merr ${err ? '' : 'hidden'}">${esc(err)}</div>` + views[tab]();
-    const dp = body().querySelector('.dayconf'); if (dp && dp.scrollIntoView) dp.scrollIntoView({ block: 'nearest' });
+  // The field you are in, by its id or its first data- attribute, so it can be found again after drawing.
+  function focusSelector(el) {
+    if (!el || !body().contains(el)) return null;
+    if (el.id) return '#' + CSS.escape(el.id);
+    const a = [...el.attributes].find(x => x.name.startsWith('data-'));
+    return a ? `[${a.name}="${CSS.escape(a.value)}"]` : null;
   }
-  const showErr = msg => { err = msg; const el = body().querySelector('.merr'); el.textContent = msg; el.classList.toggle('hidden', !msg); };
+  function render() {
+    if (!win) return;
+    const views = { blocks: blocksTab, cycles: cyclesTab, deadlines: deadlinesTab, week: weekTab, users: usersTab, agenda: agendaTab, bin: binTab, look: lookTab, backup: backupTab };
+    const fsel = focusSelector(document.activeElement);
+    body().innerHTML = `<div class="seg mtabs mtabbar">${TABS.map(k => `<button type="button" data-mtab="${k}" class="${tab === k ? 'active' : ''}">${t('manage.tab.' + k)}</button>`).join('')}</div>`
+      + `<div data-merr>${err ? `<div class="merr" role="alert">${esc(err)}</div>` : ''}</div>` + views[tab]();
+    const back = fsel && body().querySelector(fsel); if (back) back.focus();
+    const dp = body().querySelector('.dayconf'); if (dp) dp.scrollIntoView({ block: 'nearest' });
+  }
+  // A problem shown above the tab without drawing it again, so what you typed stays.
+  const showErr = msg => { err = msg; body().querySelector('[data-merr]').innerHTML = msg ? `<div class="merr" role="alert">${esc(msg)}</div>` : ''; };
   const done = () => { err = ''; App.render(); render(); };
 
   /* ---------- dragging blocks in the grid ---------- */
 
+  const CLICK_BLOCK_MIN = 60;   // a click in an empty spot makes a block of an hour
   let bd = null;
   function onDown(e) {
     const col = e.target.closest('.wkcol'); if (!col || e.button > 0) return;
-    const grid = col.closest('.wk'), lo = +grid.dataset.lo, PXH = +grid.dataset.px, day = +col.dataset.day;
+    const { lo, px: PXH } = grid, day = +col.dataset.day;
     const rect = col.getBoundingClientRect(), minAt = y => M.snap((lo + (y - rect.top) / PXH) * 60);
     const blk = e.target.closest('.wkb'), id = blk ? blk.dataset.bsel : null, b = id ? Store.blocks().find(x => x.id === id) : null;
     let mode = 'create', ref = { start: minAt(e.clientY), end: minAt(e.clientY) };
@@ -160,7 +187,7 @@ const Manage = (() => {
   }
   function onMove(e) {
     const d = bd; if (!d) return;
-    if (!d.moved && Math.abs(e.clientY - d.startY) < 4) return;
+    if (!d.moved && Math.abs(e.clientY - d.startY) < DRAG_START_PX) return;   // a click, not a drag
     d.moved = true;
     const cand = d.mode === 'move'
       ? M.fitBlock(Store.blocks(), d.day, d.id, 'move', d.ref, M.snap(d.ref.start + (e.clientY - d.startY) / d.PXH * 60))
@@ -178,7 +205,7 @@ const Manage = (() => {
     confirmDel = null; err = ''; copyTo = [];
     if (d.mode === 'create') {
       let cand = d.cand;
-      if (!d.moved) cand = M.fitBlock(Store.blocks(), d.day, null, 'create', { start: d.ref.start, end: d.ref.start }, d.ref.start + 60);   // a click makes a block of an hour
+      if (!d.moved) cand = M.fitBlock(Store.blocks(), d.day, null, 'create', { start: d.ref.start, end: d.ref.start }, d.ref.start + CLICK_BLOCK_MIN);
       if (!cand) { err = t('blocks.no_room'); render(); return; }
       selBlock = await UI.act(() => Store.createBlock(d.day, cand.start, cand.end));
     } else {
@@ -194,6 +221,7 @@ const Manage = (() => {
     const q = sel => e.target.closest(sel);
     const tb = q('[data-mtab]');
     if (tb) { tab = tb.dataset.mtab; confirmDel = null; err = ''; if (tab === 'bin') bin = null; render(); return; }
+    if (q('[data-mclose]')) { win.close(); return; }
     const cp = q('[data-bcopy]');
     if (cp) { const d0 = +cp.dataset.bcopy; copyTo = copyTo.includes(d0) ? copyTo.filter(x => x !== d0) : [...copyTo, d0]; confirmDel = null; render(); return; }
     if (q('[data-bcopygo]')) {
@@ -234,7 +262,7 @@ const Manage = (() => {
     if (ud) {
       const id = ud.dataset.udel;
       if (confirmDel !== 'u' + id) { confirmDel = 'u' + id; render(); return; }
-      confirmDel = null; View.filter.who = View.filter.who.filter(v => v !== id); View.save();
+      confirmDel = null;
       await UI.act(() => Store.removeMember(id)); done(); return;
     }
     const rs = q('[data-restore]');
@@ -244,16 +272,16 @@ const Manage = (() => {
     if (q('[data-backup]')) { await UI.act(() => Export.backup()); render(); return; }
     if (q('[data-analysis]')) { Export.analysis(); }
   }
-  const { View } = UI;
   function periodForm() {
     const n = Math.max(1, Math.min(60, Math.round(+$('mCyN').value) || 1)), u = $('mCyU').value;
     return u === 'm' ? { length: n, unit: 'm' } : { length: n * +u, unit: 'd' };
   }
+  // Without redrawing when it can't be saved, so what you typed stays.
   async function applyPeriod(quiet) {
-    const { length, unit } = periodForm();
-    const e = await UI.act(() => Store.changePeriod($('mCyStart').value, length, unit));
-    if (e) { showErr(t(e)); return false; }   // without redrawing, so what you typed stays
-    if (e === null) return false;
+    const { length, unit } = periodForm(), from = $('mCyStart').value;
+    const bad = Store.periodProblems(from);
+    if (bad) { showErr(t(Object.values(bad)[0])); return false; }
+    if ((await UI.act(() => Store.changePeriod(from, length, unit))) === null) return false;
     if (!quiet) done();
     return true;
   }
@@ -270,42 +298,43 @@ const Manage = (() => {
       // the start moves the whole block, the end changes its length
       const len = b.end - b.start;
       const s0 = tg.dataset.bs ? M.parseHm(tg.value) : b.start, e0 = tg.dataset.be ? M.parseHm(tg.value) : tg.dataset.bs ? s0 + len : b.end;
-      const prob = M.blockProblem(Store.blocks(), b.day, b.id, s0, e0);
-      if (prob) { err = t(prob); render(); return; }
+      const bad = Store.blockProblems(b.id, s0, e0);
+      if (bad) { err = t(bad.time); render(); return; }
       selBlock = await UI.act(() => Store.reviseBlock(b.id, { start: s0, end: e0 })) || b.id; done(); return;
     }
     const uid = tg.dataset.un || tg.dataset.uc;
     if (uid) {
       if (tg.dataset.uc) { await UI.act(() => Store.updateMember(uid, { color: tg.value })); done(); return; }
-      const v = tg.value.trim();
-      if (!v) { err = t('users.need_name'); render(); return; }
-      if (Store.members().some(x => x.id !== uid && x.name.toLowerCase() === v.toLowerCase())) { err = t('users.exists'); render(); return; }
+      const v = tg.value.trim(), bad = Store.memberProblems(uid, v);
+      if (bad) { showErr(t(bad.name)); return; }
       await UI.act(() => Store.updateMember(uid, { name: v })); done();
     }
   }
   async function onSubmit(e) {
     e.preventDefault();
     if (e.target.id === 'mAgendaForm') {
-      const url = $('mAgendaUrl').value.trim();
-      if (url && !/^https:\/\//i.test(url)) { showErr(t('agenda.need_https')); return; }
-      await UI.act(() => Store.setCalendarUrl(url)); Agenda.reset(); done(); UI.toast(t('agenda.saved')); return;
+      const inp = $('mAgendaUrl'), url = inp.value.trim();
+      if (UI.showProblems(Store.calendarUrlProblems(url), { url: inp })) return;
+      if ((await UI.act(() => Store.setCalendarUrl(url))) === null) return;
+      Agenda.reset(); done(); UI.toast(t('agenda.saved')); return;
     }
-    const inp = $('mUserName'), v = inp.value.trim(); if (!v) { UI.needField('mUserName', t('form.need_name')); return; }
-    if (Store.members().some(x => x.name.toLowerCase() === v.toLowerCase())) { err = t('users.exists'); render(); return; }
-    const color = PALETTE.find(c => !Store.members().some(u => u.color === c)) || PALETTE[Store.members().length % PALETTE.length];
-    await UI.act(() => Store.addMember(v, color)); done();
+    const inp = $('mUserName'), v = inp.value.trim();
+    if (UI.showProblems(Store.memberProblems(null, v), { name: inp })) return;
+    if ((await UI.act(() => Store.addMember(v))) === null) return;   // not saved: the name stays in the field
+    done();
   }
 
-  function open() { confirmDel = null; err = ''; selBlock = null; copyTo = []; bin = null; render(); dlg().showModal(); }
-  function init() {
-    $('btnManage').onclick = open;
-    $('manageClose').onclick = () => dlg().close();
-    dlg().addEventListener('click', e => { if (e.target === dlg()) dlg().close(); });
-    body().addEventListener('pointerdown', onDown);
-    body().addEventListener('click', onClick);
-    body().addEventListener('change', onChange);
-    body().addEventListener('input', e => { if (['mCyN', 'mCyU', 'mCyStart'].includes(e.target.id)) { const b = body().querySelector('[data-cysave]'); if (b) b.disabled = false; } });
-    body().addEventListener('submit', onSubmit);
+  function open() {
+    confirmDel = null; err = ''; selBlock = null; copyTo = []; bin = null;
+    win = UI.dialog({ cls: 'wide', closeOutside: () => true, onClose: () => { win = null; bd = null; } });
+    win.innerHTML = `<div class="mhead"><h3>${t('manage.button')}</h3><button type="button" class="ico" data-mclose title="${t('form.close')}" aria-label="${t('form.close')}">✕</button></div><div data-mbody></div>`;
+    win.addEventListener('pointerdown', onDown);
+    win.addEventListener('click', onClick);
+    win.addEventListener('change', onChange);
+    win.addEventListener('input', e => { if (['mCyN', 'mCyU', 'mCyStart'].includes(e.target.id)) { const b = body().querySelector('[data-cysave]'); if (b) b.disabled = false; } });
+    win.addEventListener('submit', onSubmit);
+    render();
   }
+  function init() { $('btnManage').onclick = open; }
   return { init, render };
 })();

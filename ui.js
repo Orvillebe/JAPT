@@ -2,11 +2,13 @@
  * JAPT UI - what several screens share.
  *
  * Responsibilities:
- *   - View: what this device remembers (page, calendar mode, grouping, filters, folded lists, theme)
+ *   - View: what this device remembers (page, calendar mode, grouping, filters, folded lists)
  *   - Formatting dates and times in Dutch, colours of people and goals, avatars
  *   - The task card and its meta lines (sidebar, list view, Inbox, goal view)
- *   - The filter pickers (shared by the sidebar and the list view), the goal picker, the deadline picker
- *   - Toast with Ongedaan, required-field messages, saving with the changed_at check (act)
+ *   - Windows (dialogs) that exist only while open, and the one Escape key handler
+ *   - The filter pickers (shared by the sidebar and the list view), the goal picker, the deadline picker:
+ *     their fold-outs are made when they open and removed when they close
+ *   - Toast with Ongedaan, problems shown at their field, saving with the changed_at check (act)
  *   - The small figures that sometimes walk by when a task is checked off
  *
  * Screens own their own DOM and events; this file only offers pieces.
@@ -18,14 +20,18 @@ const UI = (() => {
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const cap = x => x.charAt(0).toUpperCase() + x.slice(1);
   const tn = (key, n, vars = {}) => t(key + (n === 1 ? '.one' : '.many'), { n, ...vars });
-  const PHONE = () => matchMedia('(max-width:700px)').matches;
+  // The phone layout, the same width as the @media rules in style.css. Pop-ups also go full screen on a
+  // low screen (a phone turned sideways).
+  const PHONE_QUERY = '(max-width:700px)', FULLSCREEN_POPUP_QUERY = '(max-width:700px),(max-height:500px)';
+  const PHONE = () => matchMedia(PHONE_QUERY).matches;
 
   /* ---------- what this device remembers ---------- */
 
   // Personal view settings stay on the device, never in the database (docs/design.md).
   const VIEW_KEY = 'japt_view';
+  const NO_FILTER = () => ({ q: '', who: [], goal: [], client: [] });
   const View = (() => {
-    const d = { page: 'tasks', mode: 'workweek', groupBy: 'none', filter: { q: '', who: [], goal: [], client: [] }, fold: {}, sbHidden: false, showAchieved: false, ibTab: 'add' };
+    const d = { page: 'tasks', mode: 'workweek', groupBy: 'none', filter: NO_FILTER(), fold: {}, sbHidden: false, showAchieved: false, ibTab: 'add' };
     let v = d;
     try { v = { ...d, ...JSON.parse(localStorage.getItem(VIEW_KEY) || '{}') }; v.filter = { ...d.filter, ...v.filter }; } catch (e) { /* private window: defaults */ }
     v.date = M.today();
@@ -47,7 +53,9 @@ const UI = (() => {
 
   /* ---------- colours ---------- */
 
-  const lightOf = hex => { const n = parseInt(hex.slice(1), 16); return '#' + [16, 8, 0].map(sh => { const c = (n >> sh) & 255; return Math.round(c + (255 - c) * 0.55).toString(16).padStart(2, '0'); }).join(''); };
+  // A person's light colour: their colour mixed 55% towards white (dashed borders, unselected chips).
+  const LIGHT_MIX = 0.55;
+  const lightOf = hex => { const n = parseInt(hex.slice(1), 16); return '#' + [16, 8, 0].map(sh => { const c = (n >> sh) & 255; return Math.round(c + (255 - c) * LIGHT_MIX).toString(16).padStart(2, '0'); }).join(''); };
   const pstyle = id => { const m = Store.member(id); const c = m ? m.color : '#999999'; return `--pc:${c};--pcl:${lightOf(c)}`; };
   const uname = id => (Store.member(id) || { name: '?' }).name;
   const avatar = id => `<span class="wd" style="${pstyle(id)}" title="${esc(uname(id))}">${esc(uname(id).charAt(0).toUpperCase())}</span>`;
@@ -55,7 +63,8 @@ const UI = (() => {
   const hueStyle = h => (h === M.GREY ? NOGOAL : `--tb:hsl(${h} 55% 45%);--tbg:hsl(${h} var(--goal-bg-s) var(--goal-bg-l));--tbd:hsl(${h} 55% var(--goal-d-l))`);
   const goalStyle = g => (g ? hueStyle(M.goalHue(g)) : NOGOAL);
   const taskStyle = k => goalStyle(k && Store.goal(k.goalId));
-  const goalDot = g => { const h = M.goalHue(g); return `<i class="gpd" style="background:${h === M.GREY ? 'var(--grey-b)' : `hsl(${h} 55% 45%)`}"></i>`; };
+  const hueColour = h => (h === M.GREY ? 'var(--grey-b)' : `hsl(${h} 55% 45%)`);
+  const goalDot = g => `<i class="gpd" style="background:${hueColour(M.goalHue(g))}"></i>`;
 
   /* ---------- the task card ---------- */
 
@@ -70,57 +79,109 @@ const UI = (() => {
     if (c) out += `<div class="mrow client"><span class="k">${t('meta.client')}</span><span class="v">${esc(c.name)}</span></div>`;
     if (k.deadline) {
       const late = Store.isLate(k), due = Store.dueSoon(k);
-      out += `<div class="mrow deadline ${late ? 'late' : due ? 'due' : ''}"><span class="k">${t('meta.deadline')}</span><span class="v">${fmtDay(k.deadline)}${k.repeat ? ` <span class="dkrep">${REP_ICON} ${repText(k.repeat)}</span>` : ''}${late ? ' · ' + t('meta.planned_late') : ''}</span></div>`;
+      const rep = k.repeat ? ` <span class="dkrep">${REP_ICON} ${repText(k.repeat)}</span>` : '';
+      out += `<div class="mrow deadline ${late ? 'late' : due ? 'due' : ''}"><span class="k">${t('meta.deadline')}</span><span class="v">${fmtDay(k.deadline)}${rep}${late ? ' · ' + t('meta.planned_late') : ''}</span></div>`;
     }
     return out ? `<div class="meta">${out}</div>` : '';
   }
   const chk = k => `<input type="checkbox" class="chk" data-check="${k.id}" ${k.doneOn ? 'checked' : ''} title="${t('task.check')}">`;
   const whoHtml = k => Store.whoOf(k.id).map(avatar).join('');
 
+  // The Plan line: a link per period and per block the task is in; it jumps there (Calendar.jump).
+  function planLinks(k) {
+    const p = Store.idx().of(k.id);
+    if (!p.blocks.length && !p.periods.length) return '';
+    const link = (place, title, text) => `<button type="button" class="gl" data-goto="${M.placeText(place)}" data-gotask="${k.id}" title="${title}">${text}</button>`;
+    const links = p.periods.map(o => link(o.place, t('meta.go_period'), `${t('meta.period')} · ${Calendar.spanText(o)}`)).join('')
+      + p.blocks.map(b => link(b.place, t('meta.go_day'), `${fmtDay(b.date)} · ${span(fmt(b.start), fmt(b.end))}`)).join('');
+    return `<div class="meta"><div class="mrow plan"><span class="k">${t('meta.plan')}</span><span class="v links">${links}</span></div></div>`;
+  }
   // A card in a list. extra: more buttons; noPen: no pencil; noPlan: without the Plan line.
   function taskCard(k, { extra = '', noPen = false, noPlan = false } = {}) {
-    const p = Store.idx().of(k.id);
-    const links = noPlan || !(p.blocks.length || p.periods.length) ? '' : `<div class="meta"><div class="mrow plan"><span class="k">${t('meta.plan')}</span><span class="v links">${
-      p.periods.map(o => `<button type="button" class="gl" data-goblock="${o.key}" data-gotask="${k.id}" title="${t('meta.go_period')}">${t('meta.period')} · ${Calendar.spanText(o)}</button>`).join('')}${
-      p.blocks.map(b => `<button type="button" class="gl" data-goblock="${b.key}" data-gotask="${k.id}" title="${t('meta.go_day')}">${fmtDay(b.date)} · ${span(fmt(b.start), fmt(b.end))}</button>`).join('')}</span></div></div>`;
-    return `<div class="task ${k.doneOn ? 'done' : ''} ${Store.isLate(k) ? 'late' : ''}" draggable="true" data-src="new" data-task="${k.id}" style="${taskStyle(k)}">
+    return `<div class="task ${k.doneOn ? 'done' : ''} ${Store.isLate(k) ? 'late' : ''}" draggable="true" data-task="${k.id}" style="${taskStyle(k)}">
     ${chk(k)}
     <div class="body"><div class="trow"><div class="title">${esc(k.title)}</div><div class="who">${whoHtml(k)}</div></div>
-    ${k.note ? `<div class="desc">${esc(k.note)}</div>` : ''}${metaLine(k)}${links}</div>
+    ${k.note ? `<div class="desc">${esc(k.note)}</div>` : ''}${metaLine(k)}${noPlan ? '' : planLinks(k)}</div>
     <div class="acts">${noPen ? '' : `<button type="button" title="${t('task.edit')}" data-edit="${k.id}">✎</button>`}${extra}</div></div>`;
+  }
+
+  /* ---------- Escape ---------- */
+
+  // One handler for the whole app. Each piece that can be open registers a function that closes it and
+  // says whether something was open; the first one that was open is closed, one per press. Pieces
+  // register from inner to outer (pickers before the calendar card). A dialog closes itself (the
+  // browser does that) when nothing inside it was open.
+  const escapers = [];
+  const onEscape = fn => { escapers.push(fn); };
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (escapers.some(fn => fn())) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+
+  /* ---------- windows ---------- */
+
+  // A window that exists only while it is open: made here, removed when it closes (by a button, Escape,
+  // or a click beside it when closeOutside allows that). Returns the <dialog>; fill it after this call.
+  function dialog({ cls = '', closeOutside = () => false, onClose = null } = {}) {
+    const d = document.createElement('dialog');
+    if (cls) d.className = cls;
+    d.addEventListener('click', e => { if (e.target === d && closeOutside()) d.close(); });
+    d.addEventListener('close', () => { dkClose(); gpClose(); d.remove(); if (onClose) onClose(); });
+    document.body.appendChild(d);
+    d.showModal();
+    return d;
   }
 
   /* ---------- filter pickers ---------- */
 
-  // A filter is a fold-out list with checkboxes, in the same look as the pickers in the forms.
-  let msOpen = null;
+  // A filter is a fold-out list with checkboxes, in the same look as the pickers in the forms. Only one
+  // is open at a time; its list exists only while it is open.
+  let msOpen = null;                 // id of the open picker
+  const msShown = new Map();         // id -> {elId, key}: where each picker is drawn, to draw it again
   const MS = {
     who: { all: 'filter.everyone', kind: 'chips', opts: () => [...Store.members().map(u => ({ v: u.id, t: u.name, who: u.id })), { v: 'none', t: t('filter.nobody'), who: null }] },
-    goal: { all: 'filter.all_goals', kind: 'rows', opts: () => [...Store.clients().map(c => ({ name: c.name, goals: Store.openGoals().filter(g => g.clientId === c.id) })), { name: t('client.intern'), goals: Store.openGoals().filter(g => g.clientId == null) }]
-      .filter(x => x.goals.length).flatMap(x => [{ head: x.name }, ...x.goals.map(g => ({ v: g.id, t: g.name, dot: g }))]) },
+    goal: { all: 'filter.all_goals', kind: 'rows', opts: () => byClient(Store.openGoals()).flatMap(x => [{ head: x.name }, ...x.goals.map(g => ({ v: g.id, t: g.name, dot: g }))]) },
     client: { all: 'filter.all_clients', kind: 'rows', opts: () => [...Store.clients().map(c => ({ v: c.id, t: c.name })), { v: 'intern', t: t('client.intern') }] }
   };
+  // Goals grouped as on Doelen: clients by name, then Intern; groups without goals left out.
+  const byClient = goals => [...Store.clients().map(c => ({ name: c.name, goals: goals.filter(g => g.clientId === c.id) })), { name: t('client.intern'), goals: goals.filter(g => g.clientId == null) }].filter(x => x.goals.length);
+  const choices = key => MS[key].opts().filter(o => !o.head);
+
   function msRender(elId, key, host) {
-    const m = MS[key], opts = m.opts(), items = opts.filter(o => !o.head), id = host + '-' + key, f = View.filter;
-    f[key] = f[key].filter(v => items.some(o => o.v === v));   // an achieved goal or a removed user can't be a filter
-    const sel = f[key], names = items.filter(o => sel.includes(o.v)).map(o => o.t);
-    const box = o => `<input type="checkbox" data-msk="${key}" value="${esc(o.v)}" ${sel.includes(o.v) ? 'checked' : ''}>`;
-    const body = m.kind === 'chips'
-      ? items.map(o => `<label class="mswho" style="${o.who != null ? pstyle(o.who) : '--pc:var(--grey-d);--pcl:var(--grey-b)'}">${box(o)}<span>${esc(o.t)}</span></label>`).join('')
-      : opts.map(o => (o.head ? `<div class="gph">${esc(o.head)}</div>` : `<label class="msr">${o.dot ? goalDot(o.dot) : ''}<span class="gpt">${esc(o.t)}</span>${box(o)}</label>`)).join('');
-    $(elId).innerHTML = `<details class="ms" data-msid="${id}" ${msOpen === id ? 'open' : ''}><summary class="${names.length ? 'on' : ''}">${names.length ? esc(names.join(', ')) : t(m.all)}</summary>
-      <div class="msbk"></div><div class="msb ${m.kind}">${body || `<div class="none-msg">${t('filter.nothing')}</div>`}</div></details>`;
+    const m = MS[key], id = host + '-' + key, sel = View.filter[key], open = msOpen === id;
+    msShown.set(id, { elId, key });
+    const names = choices(key).filter(o => sel.includes(o.v)).map(o => o.t);
+    let list = '';
+    if (open) {
+      const opts = m.opts(), box = o => `<input type="checkbox" data-msk="${key}" value="${esc(o.v)}" ${sel.includes(o.v) ? 'checked' : ''}>`;
+      const body = m.kind === 'chips'
+        ? opts.map(o => `<label class="mswho" style="${o.who != null ? pstyle(o.who) : '--pc:var(--grey-d);--pcl:var(--grey-b)'}">${box(o)}<span>${esc(o.t)}</span></label>`).join('')
+        : opts.map(o => (o.head ? `<div class="gph">${esc(o.head)}</div>` : `<label class="msr">${o.dot ? goalDot(o.dot) : ''}<span class="gpt">${esc(o.t)}</span>${box(o)}</label>`)).join('');
+      list = `<div class="msbk"></div><div class="msb ${m.kind}">${body || `<div class="none-msg">${t('filter.nothing')}</div>`}</div>`;
+    }
+    $(elId).innerHTML = `<div class="ms ${open ? 'open' : ''}" data-msid="${id}"><button type="button" class="mss ${names.length ? 'on' : ''}" aria-expanded="${open}">${names.length ? esc(names.join(', ')) : t(m.all)}</button>${list}</div>`;
   }
-  const msClose = () => { msOpen = null; document.querySelectorAll('details.ms[open]').forEach(d => d.removeAttribute('open')); };
-  const clearFilter = () => { View.filter = { q: '', who: [], goal: [], client: [] }; View.save(); };
+  function msRedraw(id) { const s = msShown.get(id); if (s && $(s.elId)) msRender(s.elId, s.key, id.split('-')[0]); }
+  function msClose() { if (!msOpen) return false; const id = msOpen; msOpen = null; msRedraw(id); return true; }
+  const clearFilter = () => { View.filter = NO_FILTER(); View.save(); };
+  // A filter on something that no longer exists (an achieved or deleted goal, a removed person, a
+  // deleted client) is dropped. App.render calls this once before drawing.
+  function pruneFilter() {
+    let changed = false;
+    for (const key of Object.keys(MS)) {
+      const ok = choices(key).map(o => o.v), keep = View.filter[key].filter(v => ok.includes(v));
+      if (keep.length !== View.filter[key].length) { View.filter[key] = keep; changed = true; }
+    }
+    if (changed) View.save();
+  }
   function initFilters(onChange) {
     document.addEventListener('click', e => {
       if (e.target.closest('.msbk')) { msClose(); return; }
-      const sm = e.target.closest('details.ms > summary');
-      if (sm) { e.preventDefault(); const d = sm.parentElement, was = d.hasAttribute('open'); msClose(); if (!was) { d.setAttribute('open', ''); msOpen = d.dataset.msid; } return; }
-      if (!e.target.closest('details.ms')) msClose();
+      const b = e.target.closest('.ms > .mss');
+      if (b) { const id = b.parentElement.dataset.msid, was = msOpen === id; msClose(); if (!was) { msOpen = id; msRedraw(id); } return; }
+      if (!e.target.closest('.ms')) msClose();
     });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') msClose(); });
+    onEscape(msClose);
     document.addEventListener('change', e => {
       const c = e.target.closest('input[data-msk]'); if (!c) return;
       const a = View.filter[c.dataset.msk], i = a.indexOf(c.value);
@@ -133,34 +194,46 @@ const UI = (() => {
 
   /* ---------- the goal picker ---------- */
 
-  // Over a hidden <select>: groups as on Doelen (clients by name, then Intern), only the goals in the select.
-  function gpBuild(selId) {
-    const sel = $(selId); if (!sel) return;
+  // Over a <select> (which keeps the value and is what forms read): a button showing the goal, and a
+  // list grouped as on Doelen, made when it opens and removed when it closes.
+  let gpOpen = null;   // the .gp element whose list is open
+  const gpSelect = w => w.previousElementSibling;
+  function gpBuild(sel) {
     let w = sel.nextElementSibling;
-    if (!w || !w.classList.contains('gp')) { w = document.createElement('div'); w.className = 'gp'; w.dataset.for = selId; sel.classList.add('gpsel'); sel.after(w); }
-    const first = sel.options[0], blank = first && first.value === '';
+    if (!w || !w.classList.contains('gp')) { w = document.createElement('div'); w.className = 'gp'; sel.classList.add('gpsel'); sel.after(w); }
+    if (gpOpen === w) gpClose();
+    const first = sel.options[0], cur = Store.goal(sel.value);
+    w.innerHTML = `<button type="button" class="gpb" aria-haspopup="listbox" aria-expanded="false">${cur ? goalDot(cur) : ''}<span class="gpn ${cur ? '' : 'ph'}">${cur ? esc(cur.name) : esc(first ? first.textContent : '')}</span></button>`;
+  }
+  function gpShow(w) {
+    gpClose();
+    const sel = gpSelect(w), first = sel.options[0], blank = first && first.value === '';
     const goals = [...sel.options].map(o => o.value).filter(v => v !== '').map(v => Store.goal(v)).filter(Boolean);
     const cur = goals.find(g => g.id === sel.value);
     const row = g => `<button type="button" class="gpo ${cur && cur.id === g.id ? 'on' : ''}" data-gpv="${g.id}">${goalDot(g)}<span class="gpt">${esc(g.name)}${g.achievedOn ? ' ' + t('goal.achieved_paren') : ''}</span><i class="gpr"></i></button>`;
-    const groups = [...Store.clients().map(c => ({ name: c.name, goals: goals.filter(g => g.clientId === c.id) })), { name: t('client.intern'), goals: goals.filter(g => g.clientId == null) }].filter(x => x.goals.length);
     const none = blank && !first.disabled ? `<button type="button" class="gpo none ${!cur ? 'on' : ''}" data-gpv=""><span class="gpt">${esc(first.textContent)}</span><i class="gpr"></i></button>` : '';
-    w.innerHTML = `<div class="gpbk" data-gpclose></div><button type="button" class="gpb" aria-haspopup="listbox" aria-expanded="false">${cur ? goalDot(cur) : ''}<span class="gpn ${cur ? '' : 'ph'}">${cur ? esc(cur.name) : esc(first ? first.textContent : '')}</span></button>
-      <div class="gpp" role="listbox">${none}${groups.map(x => `<div class="gph">${esc(x.name)}</div>${x.goals.map(row).join('')}`).join('')}</div>`;
+    w.insertAdjacentHTML('beforeend', `<div class="gpbk" data-gpclose></div><div class="gpp" role="listbox">${none}${byClient(goals).map(x => `<div class="gph">${esc(x.name)}</div>${x.goals.map(row).join('')}`).join('')}</div>`);
+    w.classList.add('open'); w.querySelector('.gpb').setAttribute('aria-expanded', 'true');
+    gpOpen = w;
+    if (!matchMedia(FULLSCREEN_POPUP_QUERY).matches) w.querySelector('.gpp').scrollIntoView({ block: 'nearest' });
   }
-  function gpClose() { document.querySelectorAll('.gp.open').forEach(w => { w.classList.remove('open'); w.querySelector('.gpb').setAttribute('aria-expanded', 'false'); }); }
+  function gpClose() {
+    if (!gpOpen) return false;
+    const w = gpOpen; gpOpen = null;
+    w.querySelectorAll('.gpbk,.gpp').forEach(x => x.remove());
+    w.classList.remove('open');
+    const b = w.querySelector('.gpb'); if (b) b.setAttribute('aria-expanded', 'false');
+    return true;
+  }
   function initGoalPicker() {
     document.addEventListener('click', e => {
       const w = e.target.closest('.gp');
-      if (!w) { gpClose(); return; }
-      if (e.target.closest('[data-gpclose]')) { gpClose(); return; }
+      if (!w || e.target.closest('[data-gpclose]')) { gpClose(); return; }
       const o = e.target.closest('[data-gpv]');
-      if (o) { const sel = $(w.dataset.for); sel.value = o.dataset.gpv; sel.dispatchEvent(new Event('change', { bubbles: true })); gpClose(); gpBuild(w.dataset.for); return; }
-      if (e.target.closest('.gpb')) {
-        e.preventDefault(); const was = w.classList.contains('open'); gpClose();
-        if (!was) { w.classList.add('open'); w.querySelector('.gpb').setAttribute('aria-expanded', 'true'); if (!matchMedia('(max-width:700px),(max-height:500px)').matches) w.querySelector('.gpp').scrollIntoView({ block: 'nearest' }); }
-      }
+      if (o) { const sel = gpSelect(w); sel.value = o.dataset.gpv; sel.dispatchEvent(new Event('change', { bubbles: true })); gpBuild(sel); return; }
+      if (e.target.closest('.gpb')) { e.preventDefault(); if (gpOpen === w) gpClose(); else gpShow(w); }
     });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.querySelector('.gp.open')) { gpClose(); e.preventDefault(); e.stopPropagation(); } }, true);
+    onEscape(gpClose);
   }
   // Options for a goal select: open goals (plus keepId, for an achieved goal a task already has).
   function goalOptions(blankLabel, blankDisabled, keepId) {
@@ -173,31 +246,32 @@ const UI = (() => {
   /* ---------- the deadline picker ---------- */
 
   // Its own calendar with a row Herhalen. The hidden date field holds the value (.value the date,
-  // .dataset.rep the repeat 'n:u'); the button shows them.
+  // .dataset.rep the repeat 'n:u'); the button shows them. The calendar exists only while it is open.
   const DK_PRESETS = [['', 'repeat.never'], ['1:w', 'repeat.week'], ['2:w', 'repeat.two_weeks'], ['1:m', 'repeat.month'], ['3:m', 'repeat.three_months']];
+  const DK_YEARS_BACK = 1, DK_YEARS = 9;   // the year list: last year and the eight after it
   let dk = null;
   function dkText(i) {
     if (!i.value) return `<span class="dkph">${t('deadline.pick')}</span>`;
     const r = i.dataset.rep;
     return `<span>${fmtDay(i.value)} ${M.parseD(i.value).getUTCFullYear()}</span>${r ? `<span class="dkrep">${REP_ICON} ${repText(r)}</span>` : ''}`;
   }
-  function dxSync(id) {
-    const i = $(id); if (!i || !i.parentElement.classList.contains('dwrap')) return;
-    i.parentElement.classList.toggle('has', !!i.value);
-    const f = i.parentElement.querySelector('.dkf'); if (f) f.innerHTML = dkText(i);
+  function dxSync(i) {
+    const w = i.parentElement;
+    w.classList.toggle('has', !!i.value);
+    w.querySelector('.dkf').innerHTML = dkText(i);
     i.dispatchEvent(new Event('dxsync', { bubbles: true }));
   }
-  function setDeadline(id, date, rep) { const i = $(id); i.value = date || ''; i.dataset.rep = date ? rep || '' : ''; dxSync(id); }
-  function wrapDeadline(id) {
-    const i = $(id), w = document.createElement('span'); w.className = 'dwrap';
+  function setDeadline(i, date, rep) { i.value = date || ''; i.dataset.rep = date ? rep || '' : ''; dxSync(i); }
+  function wrapDeadline(i) {
+    const w = document.createElement('span'); w.className = 'dwrap';
     i.before(w); w.appendChild(i); i.hidden = true; i.tabIndex = -1;
     const f = document.createElement('button'); f.type = 'button'; f.className = 'dkf'; f.setAttribute('aria-haspopup', 'dialog'); w.insertBefore(f, i);
     f.addEventListener('click', e => { e.preventDefault(); dkOpen(i); });
     const b = document.createElement('button'); b.type = 'button'; b.className = 'dclr'; b.textContent = '×'; b.setAttribute('aria-label', t('deadline.clear_aria')); w.appendChild(b);
-    b.addEventListener('click', e => { e.preventDefault(); setDeadline(id, '', ''); });
-    dxSync(id);
+    b.addEventListener('click', e => { e.preventDefault(); setDeadline(i, '', ''); });
+    dxSync(i);
   }
-  function dkClose() { if (dk) { dk.bk.remove(); dk.pop.remove(); dk = null; } }
+  function dkClose() { if (!dk) return false; dk.bk.remove(); dk.pop.remove(); dk = null; return true; }
   function dkOpen(i) {
     dkClose();
     const host = i.closest('dialog') || document.body, base = i.value || M.today();
@@ -210,25 +284,27 @@ const UI = (() => {
     pop.addEventListener('click', dkClick); pop.addEventListener('change', dkChange); pop.addEventListener('input', dkInput);
     dkDraw();
   }
+  const dkq = sel => dk.pop.querySelector(sel);
   function dkDraw() {
-    const { st, pop } = dk, y0 = M.parseD(M.today()).getUTCFullYear() - 1, ws = M.getWeekStart();
-    const years = Array.from({ length: 9 }, (_, n) => y0 + n); if (!years.includes(st.y)) years.push(st.y);
+    const { st, pop } = dk, y0 = M.parseD(M.today()).getUTCFullYear() - DK_YEARS_BACK, ws = M.getWeekStart();
+    const years = Array.from({ length: DK_YEARS }, (_, n) => y0 + n); if (!years.includes(st.y)) years.push(st.y);
     const first = new Date(Date.UTC(st.y, st.m, 1)).getUTCDay(), off = (first - ws + 7) % 7, n = M.daysIn(st.y, st.m);
     let cells = '<span></span>'.repeat(off);
     for (let d = 1; d <= n; d++) { const ds = M.toDs(new Date(Date.UTC(st.y, st.m, d))); cells += `<button type="button" class="dkd ${ds === M.today() ? 'today' : ''} ${ds === st.sel ? 'sel' : ''}" data-dkd="${ds}" ${ds === st.sel ? 'aria-pressed="true"' : ''}>${d}</button>`; }
-    const p = M.parseRepeat(st.rep), off2 = !st.sel;
+    const p = M.parseRepeat(st.rep), noDate = !st.sel;
+    const monthName = k => { const m = t('mo.' + k); return m.length > 7 ? m.slice(0, 3) : m; };   // long names shortened, so the bar fits
     pop.innerHTML = `<div class="dkh"><button type="button" data-dk="prev" aria-label="${t('deadline.prev')}">‹</button>
-      <select id="dkM" aria-label="${t('deadline.month')}">${Array.from({ length: 12 }, (_, k) => { const m = t('mo.' + k); return `<option value="${k}" ${k === st.m ? 'selected' : ''}>${m.length > 7 ? m.slice(0, 3) : m}</option>`; }).join('')}</select>
-      <select id="dkY" aria-label="${t('deadline.year')}">${years.sort().map(y => `<option ${y === st.y ? 'selected' : ''}>${y}</option>`).join('')}</select>
+      <select data-dkm aria-label="${t('deadline.month')}">${Array.from({ length: 12 }, (_, k) => `<option value="${k}" ${k === st.m ? 'selected' : ''}>${monthName(k)}</option>`).join('')}</select>
+      <select data-dky aria-label="${t('deadline.year')}">${years.sort().map(y => `<option ${y === st.y ? 'selected' : ''}>${y}</option>`).join('')}</select>
       <button type="button" data-dk="next" aria-label="${t('deadline.next')}">›</button></div>
       <div class="dkw">${Array.from({ length: 7 }, (_, k) => `<span>${cap(t('wd.' + (ws + k) % 7))}</span>`).join('')}</div>
       <div class="dkg">${cells}</div>
       <div class="dkl">${REP_ICON} ${t('repeat.label')}</div>
-      <div class="dkpills">${DK_PRESETS.map(([v, k]) => `<button type="button" class="dkpill ${!st.custom && st.rep === v ? 'on' : ''}" data-dkr="${v}" ${off2 ? 'disabled' : ''}>${t(k)}</button>`).join('')}<button type="button" class="dkpill ${st.custom ? 'on' : ''}" data-dkr="custom" ${off2 ? 'disabled' : ''}>${t('repeat.custom')}</button></div>
-      ${st.custom ? `<div class="dkcus"><span>${t('repeat.every')}</span><input type="number" id="dkN" min="1" max="99" value="${p ? p.n : 2}" aria-label="${t('repeat.count')}"><select id="dkU" aria-label="${t('repeat.unit')}">${['d', 'w', 'm'].map(u => `<option value="${u}" ${(p ? p.u : 'w') === u ? 'selected' : ''}>${t('unit.' + u)}</option>`).join('')}</select></div>` : ''}
+      <div class="dkpills">${DK_PRESETS.map(([v, k]) => `<button type="button" class="dkpill ${!st.custom && st.rep === v ? 'on' : ''}" data-dkr="${v}" ${noDate ? 'disabled' : ''}>${t(k)}</button>`).join('')}<button type="button" class="dkpill ${st.custom ? 'on' : ''}" data-dkr="custom" ${noDate ? 'disabled' : ''}>${t('repeat.custom')}</button></div>
+      ${st.custom ? `<div class="dkcus"><span>${t('repeat.every')}</span><input type="number" data-dkn min="1" max="99" value="${p ? p.n : 2}" aria-label="${t('repeat.count')}"><select data-dku aria-label="${t('repeat.unit')}">${['d', 'w', 'm'].map(u => `<option value="${u}" ${(p ? p.u : 'w') === u ? 'selected' : ''}>${t('unit.' + u)}</option>`).join('')}</select></div>` : ''}
       <div class="dkbtns"><button type="button" data-dk="clear">${t('deadline.clear')}</button><button type="button" class="primary" data-dk="ok">${t('deadline.ok')}</button></div>`;
   }
-  function dkCommit() { const { st } = dk; setDeadline(st.i.id, st.sel, st.rep); dkClose(); }
+  function dkCommit() { const { st } = dk; setDeadline(st.i, st.sel, st.rep); dkClose(); }
   function dkClick(e) {
     const { st } = dk, b = e.target.closest('button'); if (!b) return;
     if (b.dataset.dkd) { st.sel = b.dataset.dkd; dkDraw(); return; }
@@ -242,44 +318,61 @@ const UI = (() => {
     else if (a === 'ok') dkCommit();
   }
   function dkChange(e) {
-    const { st } = dk;
-    if (e.target.id === 'dkM') { st.m = +e.target.value; dkDraw(); }
-    else if (e.target.id === 'dkY') { st.y = +e.target.value; dkDraw(); }
-    else if (e.target.id === 'dkU') dkInput();
+    const { st } = dk, d = e.target.dataset;
+    if (d.dkm !== undefined) { st.m = +e.target.value; dkDraw(); }
+    else if (d.dky !== undefined) { st.y = +e.target.value; dkDraw(); }
+    else if (d.dku !== undefined) dkInput();
   }
-  function dkInput() { const { st } = dk, n = $('dkN'), u = $('dkU'); if (!n || !u) return; st.rep = `${Math.max(1, Math.min(99, Math.round(+n.value) || 1))}:${u.value}`; }
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && dk) { dkClose(); e.preventDefault(); e.stopPropagation(); } }, true);
+  function dkInput() { const { st } = dk, n = dkq('[data-dkn]'), u = dkq('[data-dku]'); if (!n || !u) return; st.rep = `${Math.max(1, Math.min(99, Math.round(+n.value) || 1))}:${u.value}`; }
+  onEscape(dkClose);   // registered first: the innermost pop-up
 
-  /* ---------- toast, required fields, saving ---------- */
+  /* ---------- toast, problems at their field, saving ---------- */
 
+  // Long enough to read; with Ongedaan longer, so there is time to click it.
+  const TOAST_MS = 3500, TOAST_UNDO_MS = 6000;
   let toastTimer = null, toastUndo = null;
   function toast(msg, undo) {
     const el = $('toast');
     toastUndo = undo || null;
-    el.innerHTML = `<span>${esc(msg)}</span>${undo ? `<button type="button" id="toastUndo">${t('toast.undo')}</button>` : ''}`;
+    el.innerHTML = `<span>${esc(msg)}</span>${undo ? `<button type="button" data-toastundo>${t('toast.undo')}</button>` : ''}`;
     el.hidden = false; clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { el.hidden = true; toastUndo = null; }, undo ? 6000 : 3500);
-    if (undo) $('toastUndo').onclick = async () => { el.hidden = true; const u = toastUndo; toastUndo = null; await act(u); };
+    toastTimer = setTimeout(() => { el.hidden = true; el.innerHTML = ''; toastUndo = null; }, undo ? TOAST_UNDO_MS : TOAST_MS);
+    if (undo) el.querySelector('[data-toastundo]').onclick = async () => { el.hidden = true; el.innerHTML = ''; const u = toastUndo; toastUndo = null; await act(u); };
   }
 
-  // A required field left empty: a red border, a short sentence, and the cursor in it.
-  function needField(id, msg, focus = true) {
-    const el = $(id); if (!el) return;
+  // A problem with a field: a red border and a short sentence under it, until the field changes.
+  function needField(el, msg) {
     const box = el.closest('.f') || el.parentElement;
     box.classList.add('bad');
     let m = box.querySelector(':scope > .ferr'); if (!m) { m = document.createElement('div'); m.className = 'ferr'; m.setAttribute('role', 'alert'); box.appendChild(m); }
     m.textContent = msg;
     const clr = () => { box.classList.remove('bad'); m.remove(); };
     (el.tagName === 'SELECT' ? ['change', 'click'] : ['input']).forEach(ev => box.addEventListener(ev, clr, { once: true }));
-    if (focus) { const tg = el.tagName === 'SELECT' ? (box.querySelector('.gpb') || el) : el; tg.focus(); }
+  }
+  // The Store's problems ({field: key}) at their fields (fields: {field: element}); the cursor goes to
+  // the first. Returns true when there were problems.
+  function showProblems(problems, fields) {
+    if (!problems) return false;
+    let first = null;
+    for (const [f, key] of Object.entries(problems)) {
+      const el = fields[f]; if (!el) { toast(t(key)); continue; }
+      needField(el, t(key));
+      if (!first) first = el.tagName === 'SELECT' ? (el.nextElementSibling && el.nextElementSibling.querySelector('.gpb')) || el : el;
+    }
+    if (first) first.focus();
+    return true;
   }
 
-  // Every save goes through here. Someone else changed the same thing meanwhile: reload and say so.
+  // Every save goes through here. Returns what the action returned, or null when it was not saved:
+  //   someone else changed the same thing meanwhile -> reload and say so
+  //   the Store refused it (a rule)                  -> say why (screens normally ask first)
+  //   anything else                                  -> "not saved"
   async function act(fn) {
     try { return await fn(); }
     catch (e) {
       console.error(e);
       if (e && e.code === 'conflict') { toast(t('error.conflict')); try { await Store.reload(); } catch (e2) { console.error(e2); } }
+      else if (e && e.code === 'rule') toast(t(Object.values(e.problems)[0]));
       else toast(t('error.save'));
       return null;
     }
@@ -361,11 +454,12 @@ const UI = (() => {
   return {
     $, esc, cap, tn, PHONE, View,
     wd, wdLong, mshort, mname, dnum, fmtSp, fmtDay, fmt, span,
-    lightOf, pstyle, uname, avatar, goalStyle, taskStyle, hueStyle, goalDot, NOGOAL,
+    lightOf, pstyle, uname, avatar, goalStyle, taskStyle, hueStyle, hueColour, goalDot, NOGOAL,
     REP_ICON, repText, metaLine, taskCard, chk, whoHtml,
-    msRender, msClose, initFilters, passes, filterCount, clearFilter,
+    onEscape, dialog,
+    msRender, msClose, initFilters, passes, filterCount, clearFilter, pruneFilter,
     gpBuild, initGoalPicker, goalOptions,
-    wrapDeadline, setDeadline, dxSync, dkClose,
-    toast, needField, act, figureMaybe
+    wrapDeadline, setDeadline,
+    toast, needField, showProblems, act, figureMaybe
   };
 })();

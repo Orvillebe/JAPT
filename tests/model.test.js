@@ -168,6 +168,27 @@ test('OR within a filter, AND between filters', () => {
   eq(M.filterCount(f({ q: 'x', who: ['u1', 'u2'] })), 2);
 });
 
+/* ---------- places ---------- */
+
+test('a place goes to text and back, and a block and a period never get mixed up', () => {
+  const blk = { date: '2026-11-04', blockId: 'wo' }, per = { period: '2026-11-02' };
+  eq(M.parsePlace(M.placeText(blk)), blk);
+  eq(M.parsePlace(M.placeText(per)), per);
+  eq(M.parsePlace('2026-11-02'), null);   // a bare date is not a place
+  eq(M.parsePlace(''), null);
+  assert.ok(M.samePlace(blk, { date: '2026-11-04', blockId: 'wo' }));
+  assert.ok(!M.samePlace(blk, per));
+});
+test('the plan index answers per place, and every entry carries its place', () => {
+  const idx = idxFor([{ id: 'p1', taskId: 'a', date: '2026-11-04', blockId: 'wo', position: 2 }, { id: 'p2', taskId: 'b', date: '2026-11-04', blockId: 'wo', position: 1 }],
+    [{ id: 'q1', taskId: 'a', periodStart: '2026-11-02', position: 1 }]);
+  eq(idx.tasksIn({ date: '2026-11-04', blockId: 'wo' }), ['b', 'a']);
+  eq(idx.tasksIn({ period: '2026-11-02' }), ['a']);
+  eq(idx.placement({ period: '2026-11-02' }, 'a').id, 'q1');
+  eq(idx.of('a').blocks[0].place, { date: '2026-11-04', blockId: 'wo' });
+  eq(idx.of('a').periods[0].place, { period: '2026-11-02' });
+});
+
 /* ---------- colours ---------- */
 
 test('a stored hue outside the set moves to the nearest allowed one', () => {
@@ -175,6 +196,9 @@ test('a stored hue outside the set moves to the nearest allowed one', () => {
   eq(M.goalHue({ hue: 350 }), 8);   // around the circle
   eq(M.goalHue({ hue: -1 }), -1);
   eq(M.freshHue([{ hue: 8 }, { hue: 32 }]), 55);
+});
+test('a new person gets the first colour nobody has', () => {
+  eq(M.freshColour([{ color: M.MEMBER_COLOURS[0] }, { color: M.MEMBER_COLOURS[2] }]), M.MEMBER_COLOURS[1]);
 });
 
 console.log(`model tests: ${ok} passed`);

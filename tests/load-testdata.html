@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JAPT testdata</title>
+<style>
+  body { font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width: 620px; margin: 40px auto; padding: 0 16px; color: #232323; background: #f6f5f2 }
+  button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; margin: 4px 8px 4px 0 }
+  .ok { color: #2f6b3a } .err { color: #b3261e }
+</style>
+</head>
+<body>
+<h1>JAPT testdata</h1>
+<p>Vult de lokale versie (enkel deze browser) met een geloofwaardige geschiedenis rond vandaag, of met een back-upbestand. De echte database wordt nooit aangeraakt.</p>
+<button id="load">Testdata laden</button>
+<button id="clear">Alles leegmaken</button>
+<p><label>Back-upbestand laden: <input type="file" id="file" accept=".json,application/json"></label></p>
+<p id="msg"></p>
+<p><a href="../index.html">Naar JAPT</a></p>
+<script src="../version.js"></script>
+<script src="../config.js"></script>
+<script src="../model.js"></script>
+<script src="../id.js"></script>
+<script src="../data-local.js"></script>
+<script src="testdata.js"></script>
+<script>
+  const local = createLocalData(), msg = document.getElementById('msg');
+  const say = (t, ok = true) => { msg.textContent = t; msg.className = ok ? 'ok' : 'err'; };
+  document.getElementById('load').onclick = () => {
+    const d = createTestData(Model); local.importBackup(d);
+    say(`Geladen: ${d.data.tasks.length} taken, ${d.data.goals.length} doelen, ${d.data.work_blocks.length} werkblokken.`);
+  };
+  document.getElementById('clear').onclick = () => { local.clear(); say('Leeggemaakt.'); };
+  document.getElementById('file').onchange = async e => {
+    try { const b = JSON.parse(await e.target.files[0].text()); local.importBackup(b); say('Back-up geladen en bijgewerkt naar deze versie.'); }
+    catch (err) { say('Kon dit bestand niet lezen: ' + err.message, false); }
+  };
+</script>
+</body>
+</html>

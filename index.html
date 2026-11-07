@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#F5F4F0">
+<title>JAPT</title>
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=0.1.0">
+<!-- The look is chosen per device in Beheer; set it before the page draws, so it never flashes. -->
+<script>try { var th = localStorage.getItem('japt_theme'); if (th === 'orville' || th === 'neutral') document.documentElement.dataset.theme = th; } catch (e) {}</script>
+</head>
+<body>
+<div class="local-note" id="localNote" hidden data-i18n="app.local_note"></div>
+<div class="loading" id="loading" data-i18n="app.loading"></div>
+<div class="screen" id="versionScreen" hidden><p id="versionText"></p><button type="button" id="versionReload" data-i18n="version.reload"></button></div>
+<div class="screen" id="accessScreen" hidden><p data-i18n="access.none"></p></div>
+
+<div id="main" hidden>
+<header>
+  <h1 data-i18n="app.name"></h1>
+  <div class="seg" id="viewSeg">
+    <button type="button" data-view="tasks" data-i18n="view.tasks"></button>
+    <button type="button" data-view="goals" data-i18n="view.goals"></button>
+    <button type="button" data-view="inbox"><span data-i18n="view.inbox"></span><span class="nbadge" id="ibBadge"></span></button>
+  </div>
+  <div class="hr"><button type="button" id="btnManage" data-i18n="manage.button"></button></div>
+</header>
+
+<div class="app">
+  <aside class="side" id="sidebar">
+    <div class="sbtop">
+      <h2 data-i18n="view.tasks"></h2>
+      <div class="sbbtns">
+        <button type="button" class="primary" id="btnNewTask" data-i18n="task.new_button"></button>
+        <button type="button" id="btnHideSide" data-i18n-title="side.hide" data-i18n-aria="side.hide"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="14" height="12" rx="2"/><path d="M7 3v12"/></svg></button>
+      </div>
+    </div>
+    <div class="fbar">
+      <input type="search" id="fq" data-i18n-placeholder="filter.search_ph" autocomplete="off">
+      <div class="frow">
+        <div class="fgroup"><span class="fl" data-i18n="group.label"></span>
+          <div class="seg" id="groupSeg"><button type="button" data-group="none" data-i18n="group.none"></button><button type="button" data-group="goal" data-i18n="group.goal"></button><button type="button" data-group="client" data-i18n="group.client"></button></div></div>
+        <button type="button" id="btnFilter" data-i18n="filter.button"></button>
+      </div>
+      <div class="fpanel" id="fpanel" hidden>
+        <div class="f"><span class="fl" data-i18n="filter.who"></span><div id="fWho"></div></div>
+        <div class="f"><span class="fl" data-i18n="filter.goal"></span><div id="fGoal"></div></div>
+        <div class="f"><span class="fl" data-i18n="filter.client"></span><div id="fClient"></div></div>
+        <div class="fclear"><button type="button" id="fClear" data-i18n="filter.clear"></button></div>
+      </div>
+    </div>
+    <div id="tasks"></div>
+  </aside>
+
+  <main class="week" id="weekView">
+    <div class="calbar">
+      <button type="button" id="btnShowSide" hidden data-i18n-title="side.show"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="14" height="12" rx="2"/><path d="M7 3v12"/></svg><span data-i18n="view.tasks"></span></button>
+      <div class="nav">
+        <button type="button" id="calPrev" data-i18n-title="cal.prev">‹</button>
+        <button type="button" id="calToday" data-i18n="cal.today"></button>
+        <button type="button" id="calNext" data-i18n-title="cal.next">›</button>
+      </div>
+      <div class="callabel">
+        <button type="button" id="calOpen" class="calbtn" data-i18n-title="cal.go_to_date"><span id="calTitle"></span><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+        <span id="calSub"></span>
+        <input type="date" id="calPick" class="vh" tabindex="-1" aria-hidden="true">
+      </div>
+      <button type="button" id="lfToggle" aria-expanded="false" aria-controls="lFilter"><span data-i18n="filter.button"></span><span class="fcount" hidden></span></button>
+      <button type="button" id="vwToggle" aria-expanded="false" aria-controls="modeSeg" data-i18n="cal.view"></button>
+      <div class="lfilter" id="lFilter">
+        <div class="f"><span class="fl" data-i18n="filter.search"></span><input type="search" id="lfQ" data-i18n-placeholder="filter.search_ph" data-i18n-aria="filter.search_ph"></div>
+        <div class="f"><span class="fl" data-i18n="filter.who"></span><div id="lfWho"></div></div>
+        <div class="f"><span class="fl" data-i18n="filter.goal"></span><div id="lfGoal"></div></div>
+        <div class="f"><span class="fl" data-i18n="filter.client"></span><div id="lfClient"></div></div>
+        <button type="button" id="lfClear" data-i18n="filter.clear"></button>
+      </div>
+      <div class="seg" id="modeSeg">
+        <button type="button" data-mode="day" data-i18n="mode.day"></button>
+        <button type="button" data-mode="workweek" data-i18n="mode.workweek"></button>
+        <button type="button" data-mode="week" data-i18n="mode.week"></button>
+        <button type="button" data-mode="cycle" id="modeCycle" hidden data-i18n="mode.cycle"></button>
+        <button type="button" data-mode="list" data-i18n="mode.list"></button>
+      </div>
+    </div>
+    <div class="rothint" id="rotHint" data-i18n="cal.rotate"></div>
+    <div class="head" id="head"></div>
+    <div class="cycles" id="cycleLane"></div>
+    <div class="body" id="body"></div>
+    <div class="cyview" id="cycleView"></div>
+    <div class="listview" id="listView"></div>
+  </main>
+
+  <main class="inboxview" id="inboxView" hidden>
+    <div class="gtoolbar">
+      <h2 data-i18n="view.inbox"></h2>
+      <div class="seg" id="ibTabs">
+        <button type="button" data-ibtab="add" data-i18n="inbox.tab_add"></button>
+        <button type="button" data-ibtab="sort"><span data-i18n="inbox.tab_sort"></span><span class="nbadge" id="ibTabBadge"></span></button>
+      </div>
+    </div>
+    <section id="ibAdd">
+      <form class="ibform" id="ibForm" autocomplete="off">
+        <label class="f"><span class="fl" data-i18n="form.task"></span><input type="text" id="ibIn" data-i18n-placeholder="inbox.ph" enterkeyhint="done" data-i18n-aria="inbox.aria"></label>
+        <div class="iboptlbl"></div>
+        <div class="ibextra">
+          <label class="f full"><span class="fl" data-i18n="form.note"></span><textarea id="ibDesc" rows="2"></textarea></label>
+          <label class="f"><span class="fl" data-i18n="form.goal_optional"></span><select id="ibGoal"></select></label>
+          <label class="f"><span class="fl" data-i18n="form.deadline"></span><input type="date" id="ibDeadline"></label>
+          <div class="f full"><span class="fl" data-i18n="form.who_optional"></span><div class="wrow" id="ibWho"></div></div>
+        </div>
+        <div class="ibsubmit"><span class="ibmore" aria-hidden="true" data-i18n="inbox.more"></span><button class="primary" type="submit" data-i18n="form.add"></button></div>
+      </form>
+      <div class="ibrecent" id="ibRecent"></div>
+    </section>
+    <section id="ibSort" hidden>
+      <div class="ibtop"><button type="button" id="ibUndoBtn" data-i18n="inbox.undo"></button></div>
+      <div class="ibboard" id="ibBoard"></div>
+    </section>
+  </main>
+
+  <main class="goalsview" id="goalsView" hidden>
+    <div class="gtoolbar">
+      <h2 data-i18n="view.goals"></h2>
+      <label><input type="checkbox" id="gShowAch"> <span data-i18n="goal.show_achieved"></span></label>
+      <button type="button" class="primary" id="btnGoalNew" data-i18n="goal.new_button"></button>
+    </div>
+    <div id="goalsList"></div>
+  </main>
+</div>
+
+<div id="pop" hidden></div>
+
+<div id="dock">
+  <div class="dz" data-dropdock="open" data-i18n="list.open"></div>
+  <div class="dz" data-dropdock="backlog" data-i18n="list.backlog"></div>
+  <div class="dz" data-dropdock="done" data-i18n="list.done"></div>
+</div>
+
+<dialog id="taskDlg">
+  <form id="taskForm">
+    <h3 id="taskDlgTitle"></h3>
+    <label class="f"><span class="fl" data-i18n="form.task"></span><input type="text" id="newTask" autocomplete="off" data-i18n-placeholder="task.ph"></label>
+    <label class="f"><span class="fl" data-i18n="form.note"></span><textarea id="newDesc"></textarea></label>
+    <label class="f"><span class="fl" id="newTaskGoalLbl"></span><select id="newTaskGoal"></select></label>
+    <label class="f"><span class="fl" data-i18n="form.deadline"></span><input type="date" id="newDeadline"></label>
+    <div class="rephint" id="repHint" hidden></div>
+    <div class="f"><span class="fl" data-i18n="form.who_long"></span><div class="wrow" id="dlgWho"></div></div>
+    <label class="f" id="newListRow"><span class="fl" data-i18n="form.put_in"></span><select id="newList">
+      <option value="open" data-i18n="list.open"></option><option value="backlog" data-i18n="list.backlog"></option></select></label>
+    <div class="btns"><button type="button" id="taskDelete" class="danger" hidden></button><button type="button" id="taskCancel" data-i18n="form.cancel"></button><button type="submit" class="primary" id="taskSubmit"></button></div>
+  </form>
+</dialog>
+
+<div id="toast" role="status" hidden></div>
+
+<dialog id="goalDlg">
+  <form id="goalForm">
+    <h3 id="goalDlgTitle"></h3>
+    <label class="f"><span class="fl" data-i18n="goal.what"></span><input type="text" id="newGoal" autocomplete="off"></label>
+    <label class="f"><span class="fl" data-i18n="form.note"></span><textarea id="newGoalDesc"></textarea></label>
+    <div class="f"><span class="fl" data-i18n="goal.colour_label"></span><div class="swatches" id="goalHues"></div></div>
+    <div class="f"><span class="fl" data-i18n="goal.for_client"></span>
+      <div class="combo">
+        <input type="text" id="newGoalClient" autocomplete="off" data-i18n-placeholder="goal.client_ph">
+        <div class="combolist hidden" id="clientSuggest"></div>
+      </div>
+      <div class="cnote hidden" id="clientNote"></div>
+    </div>
+    <div class="gconf hidden" id="goalDelPanel"></div>
+    <div class="btns" id="goalBtns"><button type="button" id="goalDelete" class="danger" hidden></button><button type="button" id="goalCancel" data-i18n="form.cancel"></button><button type="submit" class="primary" id="goalSubmit"></button></div>
+  </form>
+</dialog>
+
+<dialog id="goalView" class="wide gvw"><div id="gvBody"></div></dialog>
+
+<dialog id="clientDlg">
+  <form id="clientForm">
+    <h3 data-i18n="client.edit"></h3>
+    <label class="f"><span class="fl" data-i18n="client.name"></span><input type="text" id="clientName" autocomplete="off"></label>
+    <div class="cnote hidden err" id="clientErr"></div>
+    <div class="btns"><button type="button" id="clientCancel" data-i18n="form.cancel"></button><button type="submit" class="primary" data-i18n="form.save"></button></div>
+  </form>
+</dialog>
+
+<dialog id="manageDlg" class="wide">
+  <div class="mhead"><h3 data-i18n="manage.button"></h3><button type="button" class="ico" id="manageClose" data-i18n-title="form.close" data-i18n-aria="form.close">✕</button></div>
+  <div id="manageBody"></div>
+</dialog>
+
+<!-- Pinned version: repeating meetings in the agenda (agenda.js). The 1.x build works without a bundler. -->
+<script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js" crossorigin="anonymous"></script>
+<!-- Every local file carries the app version (?v=), so after a release the browser fetches the new files
+     instead of mixing cached old ones with new ones. tests/release.test.js checks that they match. -->
+<script src="version.js?v=0.1.0"></script>
+<script src="config.js?v=0.1.0"></script>
+<script src="i18n/nl.js?v=0.1.0"></script>
+<script src="i18n/i18n.js?v=0.1.0"></script>
+<script src="model.js?v=0.1.0"></script>
+<script src="id.js?v=0.1.0"></script>
+<script src="data-local.js?v=0.1.0"></script>
+<script src="data-service.js?v=0.1.0"></script>
+<script src="store.js?v=0.1.0"></script>
+<script src="ui.js?v=0.1.0"></script>
+<script src="agenda.js?v=0.1.0"></script>
+<script src="calendar.js?v=0.1.0"></script>
+<script src="tasks.js?v=0.1.0"></script>
+<script src="goals.js?v=0.1.0"></script>
+<script src="inbox.js?v=0.1.0"></script>
+<script src="manage.js?v=0.1.0"></script>
+<script src="export.js?v=0.1.0"></script>
+<script src="app.js?v=0.1.0"></script>
+</body>
+</html>

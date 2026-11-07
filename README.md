@@ -2,7 +2,46 @@
 
 Weekly planning for a small agency team. Tasks hang under goals, goals under clients (or *Intern*). You collect tasks in the Inbox, give them a goal, and drag them into the team's standard work blocks or into a longer work period. Meetings from the team's kSuite agenda (its link is a setting in Beheer) show between the blocks. Static site, no build step.
 
-**Status: design.** Nothing is built yet. What the user sees and does is in the interaction mockup [`docs/JAPT_userinteraction_mockup.html`](docs/JAPT_userinteraction_mockup.html) (open it in a browser). What the software stores and decides is in [`docs/design.md`](docs/design.md). This README is filled in as the app is built: setup, usage, configuration, privacy, troubleshooting and code structure, as in JAFT.
+**Status: first local version.** Everything in the mockup works on local test data in your browser, plus the Bin, the three looks, the agenda link, backup and analysis export. Not built yet: the Supabase data layer and database migrations (the live address says so instead of falling back to local data), restoring a backup into the database, and the full README sections (setup, privacy, troubleshooting).
+
+What the user sees and does is in the interaction mockup [`docs/JAPT_userinteraction_mockup.html`](docs/JAPT_userinteraction_mockup.html). What the software stores and decides is in [`docs/design.md`](docs/design.md).
+
+## Trying it locally
+
+1. Start a small web server in this folder: `python3 -m http.server 8766`
+2. Open `http://localhost:8766/tests/load-testdata.html` and click **Testdata laden**. The test data is built around today, so it never goes stale.
+3. Open `http://localhost:8766/`.
+
+Everything stays in this browser (localStorage). The real database is only used on the live address (`productionHosts` in `config.js`).
+
+## Tests
+
+```bash
+node tests/model.test.js
+```
+
+```bash
+node tests/release.test.js
+```
+
+The first tests the rules (dates, blocks, work periods, lists, deadlines, repeats, order, filters); the second checks that every file in `index.html` carries the app version.
+
+## Code structure
+
+One file per task; each file starts with what it is responsible for.
+
+| File | Does |
+|---|---|
+| `config.js`, `version.js` | Settings that change rarely; app and database version |
+| `i18n/nl.js`, `i18n/i18n.js` | All interface text, by key |
+| `model.js` | The rules as pure functions, without DOM or storage |
+| `data-local.js`, `data-service.js` | Storage in this browser; picking the data layer |
+| `store.js` | Data in memory; every action as one save with its undo |
+| `ui.js` | Shared pieces: cards, pickers, toast, figures |
+| `calendar.js`, `tasks.js` | Taken page: calendar views and dragging; the task lists and form |
+| `goals.js`, `inbox.js`, `manage.js` | Doelen, Inbox, Beheer |
+| `agenda.js`, `export.js` | Meetings from the agenda link; backup and analysis export |
+| `app.js` | Starting, version check, pages, reloading at natural moments |
 
 ## Possible future
 

@@ -121,6 +121,12 @@ test('planned after the deadline is late', () => {
   assert.ok(M.isLate(T('a', { deadline: '2026-11-06' }), idx));
   assert.ok(!M.isLate(T('a', { deadline: '2026-11-09' }), idx));
 });
+test('a work period is late only when it starts after the deadline', () => {
+  const idx = idxFor([], [{ taskId: 'a', periodStart: '2026-11-02', position: 1 }]);   // 2 to 15 Nov
+  assert.ok(!M.isLate(T('a', { deadline: '2026-11-06' }), idx));   // the deadline falls in the period
+  assert.ok(!M.isLate(T('a', { deadline: '2026-11-02' }), idx));   // the deadline is its first day
+  assert.ok(M.isLate(T('a', { deadline: '2026-11-01' }), idx));    // the period starts after it
+});
 test('only planned in the past', () => {
   const past = idxFor([{ taskId: 'a', date: '2026-10-28', blockId: 'wo', position: 1 }]);
   assert.ok(M.onlyPlannedInPast(T('a'), past));

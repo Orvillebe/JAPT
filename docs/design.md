@@ -167,7 +167,7 @@ Calculated, in this order: **Gedaan** if done; **Ingepland** if it has a block p
 
 - **Due soon:** a task with a deadline within *deadline reminder days* (Beheer, default 7) comes to the top of Nog niet ingepland. A backlog task comes along.
   **Assumption:** in the mockup this moves the task out of the backlog for good. In the real app it is calculated: a due-soon backlog task is *shown* in Nog niet ingepland, its stage is not changed.
-- **Planned late** (planned after the deadline) is allowed, but shown.
+- **Planned late** (planned after the deadline) is allowed, but shown. A block is late on a day after the deadline. A work period is late only when it *starts* after the deadline: a period that holds the deadline still leaves days to finish in time. (The mockup marked a period late when it *ended* after the deadline; changed on 2026-11-08.)
 - **Repeat:** checking off a repeating task creates the next one in the Backlog, with the first deadline after today (a late task makes no backlog of overdue repeats). Unchecking removes that next task again unless it is done.
 - Editing a repeating task applies to all following times; the form says so.
 - **Unchecking a task without a goal** sends it back to the Inbox, with a toast.

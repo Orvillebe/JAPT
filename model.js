@@ -206,11 +206,13 @@ function createModel(CFG) {
   }
   // A deadline within the reminder days brings a task to the top of Nog niet ingepland.
   const dueSoon = (task, days, td = today()) => !!task.deadline && !task.doneOn && td >= addDays(task.deadline, -days);
-  // Planned after its deadline: allowed, but shown.
+  // Planned after its deadline: allowed, but shown. A block is late on a day after the deadline; a work
+  // period only when it starts after the deadline, because a period that holds the deadline still
+  // leaves days to finish in time (docs/design.md, Deadlines and repeats).
   const isLate = (task, idx) => {
     if (!task.deadline || task.doneOn) return false;
     const p = idx.of(task.id);
-    return p.blocks.some(b => b.date > task.deadline) || p.periods.some(o => o.end > task.deadline);
+    return p.blocks.some(b => b.date > task.deadline) || p.periods.some(o => o.start > task.deadline);
   };
   // Open, and every block and period it is in lies before today. Not shown yet (Possible future).
   const onlyPlannedInPast = (task, idx, td = today()) => {

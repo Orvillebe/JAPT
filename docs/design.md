@@ -256,6 +256,8 @@ The options that were considered:
 - The mockup's data becomes `tests/testdata.js`, extended with a believable history: many tasks, long titles, past weeks with changed blocks, repeats, an achieved goal, an empty week.
 - Pure logic (which list, periods, repeats, block validity) lives in `model.js` without DOM or database, with tests.
 - Local storage first, as with JATL and JAFT. Supabase follows once the local version behaves like the mockup.
+- **Typed text stays text:** screens build HTML as text and pass everything people typed through `UI.esc()`. `tests/escape.html` proves it in a browser: every typed field is filled with HTML, every screen, window, picker and tab is opened (wide and phone-sized), and one real element made from typed text fails the test. It was checked to fail by removing `esc()` on purpose (in text and in an attribute). `tests/release.test.js` fails when a calendar view or Beheer tab has no step in it.
+- **Before every release:** `node tests/model.test.js`, `node tests/release.test.js`, and `tests/escape.html` in the browser.
 
 ## 8. Possible future
 

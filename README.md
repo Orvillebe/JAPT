@@ -24,7 +24,9 @@ node tests/model.test.js
 node tests/release.test.js
 ```
 
-The first tests the rules (dates, blocks, work periods, lists, deadlines, repeats, order, filters); the second checks that every file in `index.html` carries the app version.
+The first tests the rules (dates, blocks, work periods, lists, deadlines, repeats, order, filters). The second checks that every file in `index.html` carries the app version, and that the escape test has a step for every calendar view and Beheer tab.
+
+**Escape test, in the browser:** open `http://localhost:8766/tests/escape.html` and click **Test starten**. It fills every text people can type with a piece of HTML, opens every screen, window, picker and tab (wide and phone-sized), and fails when that text ever becomes real HTML in the page instead of text. That would let a task title run as code for everyone who sees it. Your local data is put aside and put back. Run it before every release; a new screen or window needs a new step in `STEPS`.
 
 ## Code structure
 

@@ -1,7 +1,9 @@
 /**
- * Release check: every local file in index.html carries the current APP_VERSION (?v=),
- * so browsers fetch the new files after a release instead of mixing cached old and new ones.
- * Run: node tests/release.test.js (no dependencies).
+ * Release check, run: node tests/release.test.js (no dependencies).
+ *   - Every local file in index.html carries the current APP_VERSION (?v=), so browsers fetch the new
+ *     files after a release instead of mixing cached old and new ones.
+ *   - The escape test (tests/escape.html, run in a browser) has a step for every calendar view and every
+ *     Beheer tab, so a new one can't go untested.
  */
 
 const assert = require('assert');
@@ -17,7 +19,17 @@ try {
   const wrong = local.filter(u => !u.endsWith('?v=' + APP_VERSION));
   assert.deepStrictEqual(wrong, [], `these don't carry ?v=${APP_VERSION}: ${wrong.join(', ')}`);
   for (const u of local) assert.ok(fs.existsSync(path.join(__dirname, '..', u.split('?')[0])), `${u} doesn't exist`);
-  console.log(`release check passed: ${local.length} files carry ?v=${APP_VERSION}`);
+
+  const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+  const list = (src, name) => { const m = src.match(new RegExp(`const ${name} = \\[([^\\]]*)\\]`)); assert.ok(m, `${name} not found`); return [...m[1].matchAll(/'([^']+)'/g)].map(x => x[1]); };
+  const escape = read('tests/escape.html');
+  const modes = [...html.matchAll(/data-mode="([^"]+)"/g)].map(m => m[1]);
+  const missingModes = modes.filter(m => !list(escape, 'MODES').includes(m));
+  assert.deepStrictEqual(missingModes, [], `tests/escape.html has no step for the calendar view(s): ${missingModes.join(', ')}`);
+  const missingTabs = list(read('manage.js'), 'TABS').filter(k => !list(escape, 'MANAGE_TABS').includes(k));
+  assert.deepStrictEqual(missingTabs, [], `tests/escape.html has no step for the Beheer tab(s): ${missingTabs.join(', ')}`);
+
+  console.log(`release check passed: ${local.length} files carry ?v=${APP_VERSION}; the escape test covers ${modes.length} views and every Beheer tab`);
 } catch (e) {
   console.error('✗ ' + e.message);
   process.exitCode = 1;

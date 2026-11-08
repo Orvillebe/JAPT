@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JAPT escape-test</title>
+<!--
+  JAPT escape test - text that people type never becomes HTML or code in the page.
+
+  How it works:
+    1. Every text people can type (task titles and notes, goal names and notes, client and user names,
+       block names, meeting titles, the search field, the agenda link) is filled with POISON: a piece of
+       HTML that, if a screen puts it in the page without UI.esc(), becomes a real element <i data-xss>.
+       The quote at its start also breaks out of an attribute (title="...") when that isn't escaped.
+    2. JAPT runs in a frame and every screen, view, window, picker and tab is opened, on a wide screen
+       and on a phone-sized one.
+    3. After every step the page is searched for an element [data-xss]. One is enough to fail, and the
+       step and the HTML around it are shown, so you see which screen forgot esc().
+    4. "Zichtbaar" counts where the poisoned text is shown as text: a step that shows none tested nothing.
+
+  Your local data and view settings are put aside before and put back afterwards, also when the test
+  breaks off (opening this page again puts them back first). The real database is never touched.
+
+  Run it before every release (docs/design.md, Testing). A new screen, window or tab needs a new step in
+  STEPS below; otherwise it is not tested.
+-->
+<style>
+  body { font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color: #232323; background: #f6f5f2 }
+  button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid #ccc; background: #fff; cursor: pointer }
+  #sum { font-weight: 600; margin: 12px 0 } .ok { color: #2f6b3a } .err { color: #b3261e } .warn { color: #8a5a00 }
+  table { border-collapse: collapse; margin-top: 8px } td, th { border-bottom: 1px solid #ddd; padding: 3px 10px 3px 0; text-align: left; vertical-align: top }
+  pre { white-space: pre-wrap; max-width: 900px; font-size: 12px; margin: 2px 0 }
+  iframe { border: 1px solid #ccc; margin-top: 16px; background: #fff }
+</style>
+</head>
+<body>
+<h1>JAPT escape-test</h1>
+<p>Controleert dat tekst die mensen typen nooit als HTML of code in de pagina belandt. Je lokale data wordt opzij gezet en daarna teruggezet; de echte database wordt nooit aangeraakt.</p>
+<button id="run">Test starten</button>
+<div id="sum"></div>
+<div id="out"></div>
+<iframe id="app" width="1280" height="800" title="JAPT"></iframe>
+
+<script src="../version.js"></script>
+<script src="../config.js"></script>
+<script src="../model.js"></script>
+<script src="../id.js"></script>
+<script src="../data-local.js"></script>
+<script src="testdata.js"></script>
+<script>
+  const POISON = `"'><i data-xss>x</i>`;
+  const SHOWN = '<i data-xss>';            // what you read on screen when it is escaped correctly
+  const TEXT_FIELDS = ['title', 'note', 'name', 'label'];
+  const KEEP = ['japt_local_v1', 'japt_view', 'japt_theme'];   // what this test changes, put back after
+  const ASIDE = 'japt_escape_test_aside';
+  const WIDE = [1280, 800], PHONE = [390, 800];
+  const STEP_WAIT_MS = 150, START_TIMEOUT_MS = 10000;
+
+  /* ---------- your own data, put aside and back ---------- */
+
+  function putAside() { localStorage.setItem(ASIDE, JSON.stringify(Object.fromEntries(KEEP.map(k => [k, localStorage.getItem(k)])))); }
+  function putBack() {
+    const s = localStorage.getItem(ASIDE); if (!s) return false;
+    const kept = JSON.parse(s);
+    KEEP.forEach(k => { if (kept[k] == null) localStorage.removeItem(k); else localStorage.setItem(k, kept[k]); });
+    localStorage.removeItem(ASIDE);
+    return true;
+  }
+
+  /* ---------- poisoned data ---------- */
+
+  function poisonedData({ calendarUrl } = {}) {
+    const d = createTestData(Model);
+    for (const rows of Object.values(d.data)) for (const r of rows)
+      for (const f of TEXT_FIELDS) if (typeof r[f] === 'string') r[f] = POISON + (r[f] || 'leeg');
+    if (calendarUrl) d.data.calendars = [{ id: 'cal-1', url: calendarUrl }];
+    return d;
+  }
+
+  /* ---------- driving the app in the frame ---------- */
+
+  const frame = document.getElementById('app');
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const W = () => frame.contentWindow, D = () => frame.contentDocument;
+  // The app's modules are top-level consts (Store, Tasks, ...), which are not properties of window.
+  const app = name => W().eval(name);
+  const $ = s => D().querySelector(s), $$ = s => [...D().querySelectorAll(s)];
+  const click = s => { const el = typeof s === 'string' ? $(s) : s; if (el) el.click(); return !!el; };
+  const closeDialogs = () => $$('dialog[open]').forEach(x => x.close());
+  const typeIn = (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+
+  // The app's files carry ?v=version, so the browser may keep an older copy of a file changed since.
+  // Fetching each one fresh first puts the current file in the cache: the test runs on the code as it is.
+  async function freshFiles() {
+    const html = await (await fetch('../index.html', { cache: 'reload' })).text();
+    const urls = [...html.matchAll(/<(?:script|link)[^>]+(?:src|href)="([^"]+\.(?:js|css)[^"]*)"/g)].map(m => new URL(m[1], new URL('../', location.href)).href);
+    await Promise.all(urls.map(u => fetch(u, { cache: 'reload' })));
+    return urls.length;
+  }
+
+  async function openApp([w, h], data, view) {
+    createLocalData().importBackup(data);
+    localStorage.removeItem('japt_view'); localStorage.removeItem('japt_theme');
+    if (view) localStorage.setItem('japt_view', JSON.stringify(view));
+    frame.width = w; frame.height = h;
+    await new Promise(r => { frame.onload = r; frame.src = '../index.html?escape-test=' + Date.now(); });
+    const until = Date.now() + START_TIMEOUT_MS;
+    while (Date.now() < until) { const m = $('#main'); if (m && !m.hidden) { await sleep(600); return; } await sleep(100); }
+    throw new Error('JAPT did not start in the frame');
+  }
+
+  // Each step opens something; what it shows is checked afterwards. Order matters: steps build on the
+  // page left by the step before (the open page, the mode).
+  // A step can say { noText: true }: that screen shows nothing people typed, so showing none is right.
+  // MODES and MANAGE_TABS must name every calendar view and Beheer tab: tests/release.test.js checks it.
+  const MODES = ['day', 'workweek', 'week', 'cycle', 'list'];
+  const MANAGE_TABS = ['blocks', 'cycles', 'deadlines', 'week', 'users', 'agenda', 'bin', 'look', 'backup'];
+  // Beheer tabs with only settings; the agenda tab shows the link, tested in the second start.
+  const NO_TEXT_TABS = ['cycles', 'deadlines', 'week', 'agenda', 'look', 'backup'];
+  const STEPS = [
+    ['Taken: lijsten', () => click('[data-view="tasks"]')],
+    ...MODES.map(m => [`Kalender: ${m}`, () => click(`[data-mode="${m}"]`)]),
+    ['Lijstweergave: filter open', () => { click('#lfToggle'); $$('#lFilter .mss').forEach(b => b.click()); }],
+    ['Lijstweergave: filter dicht', () => { click('#lfToggle'); click('[data-mode="workweek"]'); }],
+    ['Zijbalk: groeperen per doel', () => click('[data-group="goal"]')],
+    ['Zijbalk: groeperen per klant', () => click('[data-group="client"]')],
+    ['Zijbalk: niet groeperen', () => click('[data-group="none"]')],
+    ['Zijbalk: filters open', () => { click('#btnFilter'); $$('#fpanel .mss').forEach(b => b.click()); }],
+    ['Zijbalk: filters dicht', () => { $$('#fpanel .ms.open .mss').forEach(b => b.click()); click('#btnFilter'); }],
+    ['Kalender: kaartje van een taak', () => { click('[data-mode="week"]'); return click('#weekView .chip'); }],
+    ['Taakformulier: bewerken', () => { app('Calendar').closePop(true); const k = app('Store').tasks().find(x => x.deadline && !x.doneOn); app('Tasks').openEdit(k.id); }],
+    ['Taakformulier: doelkiezer', () => click('dialog[open] .gpb')],
+    ['Taakformulier: deadlinekiezer', () => { click('dialog[open] [data-gpclose]'); return click('dialog[open] .dkf'); }],
+    ['Taakformulier: nieuw', () => { closeDialogs(); return click('#btnNewTask'); }],
+    ['Afvinken: melding', () => { closeDialogs(); return click('#tasks .chk:not(:checked)'); }],
+    ['Doelen', () => { $('#gShowAch').checked = true; $('#gShowAch').dispatchEvent(new Event('change', { bubbles: true })); return click('[data-view="goals"]'); }],
+    ['Doelen: grote weergave', () => click('[data-gopen]')],
+    ['Doelen: bewerken in de weergave', () => click('dialog[open] [data-gvedit]')],
+    ['Doelformulier: klantsuggesties', () => { const i = $$('dialog[open] input[type="text"]'); i.forEach(x => typeIn(x, '"')); return i.length > 0; }],
+    ['Klant hernoemen', () => { closeDialogs(); return click('[data-clientedit]'); }],
+    ['Inbox: toevoegen', () => { closeDialogs(); click('[data-view="inbox"]'); return click('[data-ibtab="add"]'); }],
+    ['Inbox: doelkiezer', () => click('#ibAdd .gpb')],
+    ['Inbox: verwerken', () => { click('#ibAdd [data-gpclose]'); return click('[data-ibtab="sort"]'); }],
+    ['Prullenbak vullen', async () => { const S = app('Store'); await S.binTask(S.tasks()[0].id); }],
+    ...MANAGE_TABS.map(tab =>
+      [`Beheer: ${tab}`, () => { if (!$('dialog[open] [data-mtab]')) click('#btnManage'); return click(`dialog[open] [data-mtab="${tab}"]`); },
+        { noText: NO_TEXT_TABS.includes(tab) }]),
+    ['Beheer: werkblok gekozen', () => { click('dialog[open] [data-mtab="blocks"]'); return click('dialog[open] .wkb[data-bsel]'); }],
+    ['Zoeken in de zijbalk', () => { closeDialogs(); click('[data-view="tasks"]'); typeIn($('#fq'), POISON); }],
+    ['Zoeken in de lijstweergave', () => { typeIn($('#fq'), ''); click('[data-mode="list"]'); click('#lfToggle'); typeIn($('#lfQ'), POISON); }]
+  ];
+  // A second start: the agenda link itself poisoned (it is shown in Beheer and can't be saved this way).
+  const LINK_STEPS = [
+    ['Beheer: agenda-link', () => { click('#btnManage'); return click('dialog[open] [data-mtab="agenda"]'); }],
+    ['Kalender met een kapotte agenda-link', () => { closeDialogs(); return click('[data-mode="week"]'); }]
+  ];
+
+  /* ---------- checking ---------- */
+
+  const around = el => { let p = el.parentElement || el; for (let i = 0; i < 2 && p.parentElement && p.outerHTML.length < 300; i++) p = p.parentElement; return p.outerHTML.slice(0, 600); };
+  function check() {
+    const hits = $$('[data-xss]');
+    // Counted in the open window when there is one, so the page behind it doesn't count as tested.
+    const box = $$('dialog[open]').pop() || D().body;
+    const shown = (box.innerText.split(SHOWN).length - 1) + [...box.querySelectorAll('input,textarea')].filter(x => x.value.includes(SHOWN)).length;
+    return { hits: hits.map(around), shown };
+  }
+
+  // A leak stays in the page (a hidden view keeps its HTML), so each one is reported once: at the step
+  // where it first appeared, which is the screen that forgot esc().
+  async function runSteps(size, steps, results) {
+    const seen = new Set();
+    for (const [name, fn, opt = {}] of steps) {
+      let note = '';
+      try { if ((await fn()) === false) note = 'niet gevonden'; } catch (e) { note = 'fout: ' + e.message; }
+      await sleep(STEP_WAIT_MS);
+      const c = check(), hits = c.hits.filter(h => !seen.has(h));
+      hits.forEach(h => seen.add(h));
+      results.push({ size, name, note, shown: c.shown, hits, noText: !!opt.noText });
+    }
+  }
+
+  async function run() {
+    const btn = document.getElementById('run'); btn.disabled = true;
+    const results = [];
+    putBack(); putAside();
+    try {
+      if (!(await freshFiles())) throw new Error('no files found in index.html');
+      for (const size of [WIDE, PHONE]) {
+        const label = size === WIDE ? 'breed' : 'telefoon';
+        await openApp(size, poisonedData());
+        await runSteps(label, STEPS, results);
+        await openApp(size, poisonedData({ calendarUrl: 'https://agenda.invalid/' + POISON }));
+        await runSteps(label, LINK_STEPS, results);
+      }
+    } catch (e) {
+      results.push({ size: '', name: 'De test brak af', note: e.message, hits: [], shown: 0 });
+    } finally {
+      frame.src = 'about:blank';
+      putBack();
+      btn.disabled = false;
+    }
+    report(results);
+  }
+
+  /* ---------- the report ---------- */
+
+  const escT = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function report(results) {
+    const bad = results.filter(r => r.hits.length), broke = results.filter(r => r.name === 'De test brak af');
+    const empty = results.filter(r => !r.hits.length && !r.shown && !r.noText);
+    const sum = document.getElementById('sum');
+    sum.className = bad.length || broke.length ? 'err' : 'ok';
+    sum.textContent = bad.length ? `MISLUKT: op ${bad.length} plek(ken) werd getypte tekst HTML.`
+      : broke.length ? 'MISLUKT: de test brak af.'
+      : `GESLAAGD: ${results.length} stappen, nergens werd getypte tekst HTML.` + (empty.length ? ` ${empty.length} stap(pen) toonden geen getypte tekst (zie oranje).` : '');
+    document.getElementById('out').innerHTML = `<table><tr><th>Scherm</th><th>Stap</th><th>Zichtbaar</th><th>Resultaat</th></tr>${results.map(r => `<tr>
+      <td>${escT(r.size)}</td><td>${escT(r.name)}</td><td>${r.shown}</td>
+      <td class="${r.hits.length ? 'err' : r.shown || r.noText ? 'ok' : 'warn'}">${r.hits.length ? 'HTML in de pagina:' + r.hits.map(h => `<pre>${escT(h)}</pre>`).join('') : r.shown ? 'ok' : r.noText ? 'ok (toont geen getypte tekst)' : 'niets getoond: deze stap testte niets'}${r.note ? ' (' + escT(r.note) + ')' : ''}</td></tr>`).join('')}</table>`;
+    window.escapeResult = { passed: !bad.length && !broke.length, results };
+  }
+
+  if (putBack()) document.getElementById('sum').textContent = 'Je data van een afgebroken test is teruggezet.';
+  document.getElementById('run').onclick = run;
+</script>
+</body>
+</html>

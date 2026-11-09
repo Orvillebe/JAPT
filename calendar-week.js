@@ -147,13 +147,14 @@ const CalendarWeek = (() => {
     return `<div class="covered" title="${esc(titles)}">${UI.tn('cal.covered_tasks', ids.length)}</div>`;
   }
   const SHORT_MINUTES = 45;   // shorter is just room for its times and one task, so both get smaller
-  function blockPiece(place, from, to, firstHour, label, content, { noRoom = false, part = false } = {}) {
+  // head: the block's name and times, on its first piece only.
+  function blockPiece(place, from, to, firstHour, head, content, { noRoom = false, part = false } = {}) {
     const position = `top:${topPx(from, firstHour)}px;height:${(to - from) / 60 * PX_PER_HOUR}px`;
     const short = to - from < SHORT_MINUTES ? 'short' : '';
     return html`
       <div class="block ${short} ${noRoom ? 'noroom' : ''}" ${noRoom ? 'data-noroom' : ''}
         ${part ? `data-part-from="${from}" data-part-to="${to}"` : ''} data-place="${P(place)}" style="${position}">
-        <div class="bh">${label}<span>${UI.span(UI.fmt(from), UI.fmt(to))}</span></div>
+        ${head}
         ${content}
       </div>`;
   }
@@ -163,14 +164,15 @@ const CalendarWeek = (() => {
     const place = { date: day, blockId: block.id };
     const ids = Store.idx().tasksIn(place), chips = ids.map(id => blockChip(id, place)).join('');
     const label = block.label ? `<span>${esc(block.label)}</span>` : '';
+    const head = `<div class="bh">${label}<span>${UI.span(UI.fmt(block.start), UI.fmt(block.end))}</span></div>`;
     const parts = M.freeParts(block, meetings);
     if (!parts.length) {
-      return blockPiece(place, block.start, block.end, firstHour, label, coveredTasksHtml(ids), { noRoom: true });
+      return blockPiece(place, block.start, block.end, firstHour, head, coveredTasksHtml(ids), { noRoom: true });
     }
     const isPart = parts.length > 1 || parts[0].start !== block.start || parts[0].end !== block.end;
     return parts.map((part, i) => {
       const content = `<div class="list">${i === 0 ? chips || dropHere() : dropHere()}</div>`;
-      return blockPiece(place, part.start, part.end, firstHour, i === 0 ? label : '', content, { part: isPart });
+      return blockPiece(place, part.start, part.end, firstHour, i === 0 ? head : '', content, { part: isPart });
     }).join('');
   }
   function dayColumnHtml(day, firstHour, lastHour) {

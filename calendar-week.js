@@ -139,10 +139,10 @@ const CalendarWeek = (() => {
     const position = blocks.findIndex(b => b.key === key) + 1;
     return chip(k, place, { side: part(blocks.length, position) + unplanBtn(place, t('cal.out_of_block')) });
   }
-  function blockHtml(day, block, firstHour, side) {
+  function blockHtml(day, block, firstHour) {
     const place = { date: day, blockId: block.id };
     const chips = Store.idx().tasksIn(place).map(id => blockChip(id, place)).join('');
-    const position = `top:${topPx(block.start, firstHour)}px;height:${heightPx(block)}px${sideStyle(side)}`;
+    const position = `top:${topPx(block.start, firstHour)}px;height:${heightPx(block)}px`;
     const label = block.label ? `<span>${esc(block.label)}</span>` : '';
     return html`
       <div class="block" data-place="${P(place)}" style="${position}">
@@ -153,10 +153,9 @@ const CalendarWeek = (() => {
   function dayColumnHtml(day, firstHour, lastHour) {
     const blocks = Store.blocksOn(day);
     const today = day === td() ? 'today' : '', off = blocks.length ? '' : 'off', past = day < td() ? 'past' : '';
-    const meetings = Agenda.on(day), sides = M.sideBySide([...blocks, ...meetings]);   // blocks stand on the left
-    const meetingSides = sides.slice(blocks.length);
-    const meetingsHtml = meetings.map((meeting, i) => meetingHtml(meeting, firstHour, meetingSides[i])).join('');
-    const blocksHtml = blocks.map((block, i) => blockHtml(day, block, firstHour, sides[i])).join('');
+    const meetings = Agenda.on(day), sides = M.sideBySide(meetings);
+    const meetingsHtml = meetings.map((meeting, i) => meetingHtml(meeting, firstHour, sides[i])).join('');
+    const blocksHtml = blocks.map(block => blockHtml(day, block, firstHour)).join('');
     const height = (lastHour - firstHour) * PX_PER_HOUR;
     return html`
       <div class="col ${today} ${off} ${past}" style="--px:${PX_PER_HOUR}px;height:${height}px">

@@ -685,6 +685,9 @@ input,textarea,select{color:var(--text)}
 .local-note{background:var(--warn-bg);color:var(--warn-ink);font-size:13px;text-align:center;padding:5px 16px}
 .err{color:var(--danger)}
 #toast button{margin-left:12px;background:none;border:0;color:inherit;font-weight:700;text-decoration:underline;padding:0}
+.meeting{z-index:2}   /* een meeting staat boven een werkblok: die tijd ben je niet vrij */
+.dragging-any .meeting{pointer-events:none}   /* slepen gaat door de meeting heen naar het blok eronder */
+
 /* Beheer: de tabbladen als menu links, zodat negen woorden niet over twee rijen breken */
 dialog.manage{width:min(960px,94vw)}
 dialog.manage [data-mbody]{display:grid;grid-template-columns:150px minmax(0,1fr);gap:24px;align-items:start}

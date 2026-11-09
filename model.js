@@ -98,9 +98,9 @@ function createModel(CFG) {
     return e0 <= hi && s0 >= lo ? { start: s0, end: e0 } : null;
   }
 
-  // Blocks and meetings that overlap in time stand side by side, so one never hides the other. For items
-  // {start, end} (minutes), in the same order: {lane, lanes}: its place, and how many stand next to each
-  // other in its group. Items that touch only at the edge don't overlap. Earlier in the list goes further left.
+  // Meetings that overlap in time stand side by side, so one never hides the other. For items {start, end}
+  // (minutes), in the same order: {lane, lanes}: its place, and how many stand next to each other in its
+  // group. Items that touch only at the edge don't overlap. Earlier in the list goes further left.
   function sideBySide(items) {
     const out = items.map(() => ({ lane: 0, lanes: 1 }));
     const order = items.map((_, i) => i).sort((a, b) => items[a].start - items[b].start);

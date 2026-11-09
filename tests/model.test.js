@@ -86,15 +86,15 @@ test('monthly periods follow the calendar', () => {
 test('what doesn\'t overlap keeps the full width, also when it only touches', () => {
   eq(M.sideBySide([{ start: 540, end: 600 }, { start: 600, end: 660 }]), [{ lane: 0, lanes: 1 }, { lane: 0, lanes: 1 }]);
 });
-test('a meeting during a block stands next to it, the block on the left', () => {
+test('two that overlap stand next to each other, the first on the left', () => {
   eq(M.sideBySide([{ start: 540, end: 750 }, { start: 600, end: 660 }]), [{ lane: 0, lanes: 2 }, { lane: 1, lanes: 2 }]);
 });
-test('also when the meeting starts first, the block keeps its place if it has one', () => {
+test('also when the later one in the list starts first', () => {
   const r = M.sideBySide([{ start: 600, end: 720 }, { start: 540, end: 660 }]);
   eq(r.map(x => x.lanes), [2, 2]);
   assert.notStrictEqual(r[0].lane, r[1].lane);
 });
-test('two meetings during a block make three next to each other', () => {
+test('three that overlap make three next to each other', () => {
   eq(M.sideBySide([{ start: 540, end: 750 }, { start: 600, end: 660 }, { start: 630, end: 690 }]).map(x => x.lanes), [3, 3, 3]);
 });
 test('a free lane is used again within a group', () => {

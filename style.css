@@ -495,6 +495,12 @@ dialog.gvw.editing{overflow:visible}
 .chip .t{flex:1 1 50%;min-width:0;overflow-wrap:break-word;font-weight:600;line-height:1.3}
 /* past het niet in het blok: één regel per taak, klik voor alle info */
 .block.lean .chip .mrow.client{display:none}
+.block.lean{padding:4px 6px;gap:3px}
+.block.lean .chip{padding:3px 8px;gap:2px}
+.block.lean .chip .t{font-size:13px}
+.block.lean .chip .wd{width:18px;height:18px;font-size:9.5px}
+.block.lean .chip .meta{gap:1px}
+.block.lean .list{gap:4px}
 .block.snug .chip{padding:4px 8px;gap:0}
 .block.snug .chip .meta{display:none}
 .block.snug .chip .ct{align-items:center}

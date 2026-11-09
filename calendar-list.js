@@ -5,7 +5,6 @@
  *   - The filter above the list, and whether it is unfolded
  *   - The planned tasks per period and day, then the backlog
  *
- * Called back at run time: Calendar.isRunning, spanText.
  */
 
 const CalendarList = (() => {
@@ -93,10 +92,10 @@ const CalendarList = (() => {
       .map(entry => (entry.type === ENTRY_DAY ? listDayHtml(entry.date) : listWholePeriodHtml(entry.key)))
       .join('');
     if (!period) return `<section class="lsec">${inner}</section>`;
-    const running = Calendar.isRunning(period) ? `<small>${t('cal.running')}</small>` : '';
+    const running = CalendarViews.isRunning(period) ? `<small>${t('cal.running')}</small>` : '';
     return html`
       <section class="lsec per">
-        <h3>${t('meta.period')} ${Calendar.spanText(period)}${running}</h3>
+        <h3>${t('meta.period')} ${CalendarViews.spanText(period)}${running}</h3>
         ${inner}
       </section>`;
   }

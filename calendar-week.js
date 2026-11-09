@@ -7,7 +7,6 @@
  *   - The day columns: hours, meetings, work blocks with their tasks
  *   - Compact rows in a block where the tasks don't fit
  *
- * Called back at run time: Calendar.calDays, spanText, moreVisible, periodPlace.
  */
 
 const CalendarWeek = (() => {
@@ -51,8 +50,8 @@ const CalendarWeek = (() => {
   function periodTaskChip(id, period) {
     const k = Store.task(id);
     if (!k) return '';
-    const side = periodPart(id, period.key) + unplanBtn(Calendar.periodPlace(period), t('cal.out_of_period'));
-    return chip(k, Calendar.periodPlace(period), { side });
+    const side = periodPart(id, period.key) + unplanBtn(CalendarViews.periodPlace(period), t('cal.out_of_period'));
+    return chip(k, CalendarViews.periodPlace(period), { side });
   }
 
   /* ---------- work-period lane above the week ---------- */
@@ -70,16 +69,16 @@ const CalendarWeek = (() => {
     return groups;
   }
   function laneGroupHtml({ period, from, to }, days) {
-    const place = Calendar.periodPlace(period);
-    const continuesLeft = days[from] > period.start && Calendar.moreVisible(period, days.slice(from), true);
-    const continuesRight = days[to] < period.end && Calendar.moreVisible(period, days.slice(0, to + 1), false);
+    const place = CalendarViews.periodPlace(period);
+    const continuesLeft = days[from] > period.start && CalendarViews.moreVisible(period, days.slice(from), true);
+    const continuesRight = days[to] < period.end && CalendarViews.moreVisible(period, days.slice(0, to + 1), false);
     const chips = Store.idx().tasksIn(place).map(id => periodTaskChip(id, period)).join('');
     // Grid lines count from 1 and the hours take the first column: from + 2 up to the line after to.
     const gridPos = `grid-column:${from + 2} / ${to + 3};grid-row:1`;
     const classes = ['cycle', continuesLeft ? 'cl' : '', continuesRight ? 'cr' : ''].join(' ');
     return html`
       <div class="${classes}" data-place="${P(place)}" style="${gridPos}">
-        <div class="cyh"><b>${Calendar.spanText(period)}</b></div>
+        <div class="cyh"><b>${CalendarViews.spanText(period)}</b></div>
         <div class="list">${chips || dropHere()}</div>
       </div>`;
   }
@@ -154,7 +153,7 @@ const CalendarWeek = (() => {
       </div>`;
   }
   function renderWeek() {
-    const days = Calendar.calDays(), cols = `${HOURS_COL_W}px repeat(${days.length},minmax(0,1fr))`;
+    const days = CalendarViews.calDays(), cols = `${HOURS_COL_W}px repeat(${days.length},minmax(0,1fr))`;
     const headEl = $('head'), bodyEl = $('body');
     headEl.style.gridTemplateColumns = cols;
     bodyEl.style.gridTemplateColumns = cols;

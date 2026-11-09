@@ -7,7 +7,7 @@
  *   - Jumping to the place a task is planned in, and how long that mark stays
  *
  * The only owner of the open card, the focused task, the saved sidebar and the jump hold.
- * Called back at run time: Calendar.render, calDays, isRunning, inPeriodWindow, periodPlace.
+ * After a jump it asks Calendar.render to draw again; that is the only call back into calendar.js.
  */
 
 const CalendarCard = (() => {
@@ -110,13 +110,13 @@ const CalendarCard = (() => {
   function moveToPeriodPlace(place, period) {
     const periodView = View.mode === MODE.PERIOD;
     const visible = periodView
-      ? Calendar.inPeriodWindow(place.period)
-      : Calendar.calDays().some(day => period && day >= period.start && day <= period.end);
-    if (period && !visible) View.date = !periodView && Calendar.isRunning(period) ? td() : period.start;
+      ? CalendarViews.inPeriodWindow(place.period)
+      : CalendarViews.calDays().some(day => period && day >= period.start && day <= period.end);
+    if (period && !visible) View.date = !periodView && CalendarViews.isRunning(period) ? td() : period.start;
   }
   function moveToBlockPlace(place, period) {
     if (View.mode === MODE.PERIOD && period) {
-      if (!Calendar.inPeriodWindow(period.key)) View.date = period.start;
+      if (!CalendarViews.inPeriodWindow(period.key)) View.date = period.start;
       return;
     }
     View.date = place.date;
@@ -124,7 +124,7 @@ const CalendarCard = (() => {
   }
   function markJumpTarget(place, period, id) {
     // in the period view a task on a block is shown in its period's column
-    const host = P(View.mode === MODE.PERIOD && !place.period ? Calendar.periodPlace(period) : place);
+    const host = P(View.mode === MODE.PERIOD && !place.period ? CalendarViews.periodPlace(period) : place);
     const el = document.querySelector(`[data-place="${host}"] [data-task="${id}"]`);
     if (!el) return;
     const rect = el.getBoundingClientRect();

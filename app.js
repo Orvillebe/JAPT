@@ -19,8 +19,9 @@
  *   filter-picker.js, goal-picker.js, deadline-picker.js - the fold-out lists to choose with
  *   drag.js              - dragging a task: one handler, drop zones per screen
  *   agenda.js            - meetings from the agenda link
+ *   calendar-views.js    - the table of calendar views and what they share
  *   calendar-week.js, -period.js, -list.js, -card.js - the calendar's views and the open task card
- *   calendar.js          - Taken page, right: the view table, the bar, dropping, swiping
+ *   calendar.js          - Taken page, right: the bar, drawing, dropping, swiping
  *   tasks.js             - Taken page, left: the lists, the task form, checking off
  *   goals.js             - Doelen page
  *   inbox.js             - Inbox page

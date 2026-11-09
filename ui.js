@@ -147,7 +147,7 @@ const UI = (() => {
       <button type="button" class="gl" data-goto="${M.placeText(place)}" data-gotask="${k.id}" title="${title}">
         ${text}
       </button>`;
-    const periodLink = o => link(o.place, t('meta.go_period'), `${t('meta.period')} · ${Calendar.spanText(o)}`);
+    const periodLink = o => link(o.place, t('meta.go_period'), `${t('meta.period')} · ${CalendarViews.spanText(o)}`);
     const blockLink = b => link(b.place, t('meta.go_day'), `${fmtDay(b.date)} · ${span(fmt(b.start), fmt(b.end))}`);
     const links = p.periods.map(periodLink).join('') + p.blocks.map(blockLink).join('');
     return `<div class="meta">${metaRow('plan', t('meta.plan'), links, 'v links')}</div>`;

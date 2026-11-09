@@ -6,7 +6,6 @@
  *   - Phone: the title shows the period in view
  *
  * Uses the chips of CalendarWeek, so it loads after calendar-week.js.
- * Called back at run time: Calendar.periodWindow, isRunning, periodPlace, yearOf, yearSuffix.
  */
 
 const CalendarPeriod = (() => {
@@ -18,7 +17,7 @@ const CalendarPeriod = (() => {
   /* ---------- work-period view ---------- */
 
   function phonePeriodTitle(period) {
-    const { start, end } = period, { yearOf, yearSuffix } = Calendar;
+    const { start, end } = period, { yearOf, yearSuffix } = CalendarViews;
     return t('time.span', {
       a: `${UI.dnum(start)} ${UI.mshort(start)}${yearOf(start) !== yearOf(end) ? ' ' + yearOf(start) : ''}`,
       z: `${UI.dnum(end)} ${UI.mshort(end)}${yearSuffix(end)}`
@@ -35,7 +34,7 @@ const CalendarPeriod = (() => {
   // Phone: the title shows the period in view (1 of 4).
   function syncPeriodHint() {
     if (!UI.PHONE()) return;
-    const scroller = $('cycleView'), periods = Calendar.periodWindow();
+    const scroller = $('cycleView'), periods = CalendarViews.periodWindow();
     if (!scroller || !periods.length) return;
     const scrolled = scroller.clientWidth ? Math.round(scroller.scrollLeft / scroller.clientWidth) : 0;
     const index = Math.min(periods.length - 1, scrolled);
@@ -44,7 +43,7 @@ const CalendarPeriod = (() => {
   }
   function periodHeadHtml(period) {
     return html`
-      <div class="${Calendar.isRunning(period) ? 'today' : ''}">
+      <div class="${CalendarViews.isRunning(period) ? 'today' : ''}">
         ${UI.fmtDay(period.start)}<small>${t('time.until', { z: UI.fmtSp(period.end) })}</small>
       </div>`;
   }
@@ -79,17 +78,17 @@ const CalendarPeriod = (() => {
   // First the period's own tasks (free to order), then the tasks on a block (fixed on their day).
   function periodColumnHtml(period) {
     const dated = [...firstPlacesIn(period)].map(([id, from]) => datedChip(id, from, period));
-    const own = Store.idx().tasksIn(Calendar.periodPlace(period)).map(id => periodTaskChip(id, period)).join('');
+    const own = Store.idx().tasksIn(CalendarViews.periodPlace(period)).map(id => periodTaskChip(id, period)).join('');
     const body = (own ? `<div class="cyown">${own}</div>` : '')
       + (dated.length && own ? `<div class="cysep">${t('cal.on_fixed_days')}</div>` : '')
       + (dated.length ? `<div class="cydated">${dated.join('')}</div>` : '');
     return html`
-      <div class="cycol ${Calendar.isRunning(period) ? 'today' : ''}">
-        <div class="cyblock" data-place="${P(Calendar.periodPlace(period))}">${body || dropHere()}</div>
+      <div class="cycol ${CalendarViews.isRunning(period) ? 'today' : ''}">
+        <div class="cyblock" data-place="${P(CalendarViews.periodPlace(period))}">${body || dropHere()}</div>
       </div>`;
   }
   function renderPeriodView() {
-    const periods = Calendar.periodWindow();
+    const periods = CalendarViews.periodWindow();
     const columns = periods.map(period => `minmax(${PERIOD_COL_MIN_W}px,${period.weight}fr)`).join(' ');
     const gridStyle = `--n:${periods.length};grid-template-columns:${columns}`;
     $('cycleView').innerHTML = html`

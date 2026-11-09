@@ -2,11 +2,10 @@
  * JAPT Calendar - the Taken page on the right: Dag, Werkweek, Week, Werkperiode and Lijst.
  *
  * Responsibilities:
- *   - The table of view modes: per mode what differs (VIEWS, at the top)
- *   - Periods as shown (a hidden weekend, the periods in view)
  *   - The bar on top: previous, today, next, go to a date, filter (list view), view mode
- *   - Drawing the current view; the views themselves are in calendar-week.js, calendar-period.js
- *     and calendar-list.js, the open task and the jump in calendar-card.js (these load first)
+ *   - Drawing the current view; the table of views and what they share are in calendar-views.js, the
+ *     views themselves in calendar-week.js, calendar-period.js and calendar-list.js, the open task and
+ *     the jump in calendar-card.js (these load first)
  *   - The drop zone for blocks and periods (drag.js); the sidebar lists have their own (tasks.js)
  *   - The clicks in the calendar
  *   - Swiping on a phone to the previous or next day or week
@@ -17,112 +16,22 @@
 
 const Calendar = (() => {
   const M = Model, { $, View, MODE } = UI;
+  const {
+    SURFACE, currentView, viewClasses, calDays, isRunning, periodWindow, periodPlace, yearOf, yearSuffix
+  } = CalendarViews;
   const { renderWeek, fitBlocks } = CalendarWeek;
   const { renderPeriodView, syncPeriodHint } = CalendarPeriod;
   const { renderListView, toggleFilter } = CalendarList;
   const { closePop, reapplyFocus, focusTask, jump, onJumpHoldMove } = CalendarCard;
-  const PERIODS_SHOWN = 4;       // periods side by side in the period view
-  const DAYS_PER_WEEK = 7;
   const td = () => M.today();
-
-  /* ---------- the view modes ---------- */
-
-  function oneDay(date) { return [date]; }
-  function wholeWeek(date) { return M.weekDays(date); }
-  function workDays(date) { return M.weekDays(date).filter(day => !M.isWeekend(day)); }
-
-  function stepByDays(count) { return (date, direction) => M.addDays(date, direction * count); }
-  // The start of the neighbouring period, or null when there is none to go to.
-  function stepByPeriod(date, direction) {
-    const period = Store.periodAt(date);
-    if (direction > 0) return period ? M.addDays(period.end, 1) : null;
-    const previous = period && Store.periodAt(M.addDays(period.start, -1));
-    return previous ? previous.start : null;
-  }
-
-  // What differs per view mode. A new view is a row here and a draw function (and a SURFACES row if
-  // it draws somewhere new).
-  //   days          the days it shows; period and list have no days of their own, the bar still uses these
-  //   hidesWeekend  Saturday and Sunday are left out of a period's span too
-  //   step          the date that previous (-1) or next (1) goes to, or null to stay
-  //   cssClass      the class on #weekView; style.css shows and hides the parts of the page with it
-  //   needsAgenda   whether meetings are fetched for its days
-  //   swipes        whether a finger can move it to the previous or next one (phone)
-  //   draw          the function that draws it
-  const VIEWS = {
-    [MODE.DAY]: {
-      days: oneDay, hidesWeekend: false, step: stepByDays(1),
-      cssClass: 'daymode', needsAgenda: true, swipes: true, draw: renderWeek
-    },
-    [MODE.WORKWEEK]: {
-      days: workDays, hidesWeekend: true, step: stepByDays(DAYS_PER_WEEK),
-      cssClass: 'wkmode', needsAgenda: true, swipes: true, draw: renderWeek
-    },
-    [MODE.WEEK]: {
-      days: wholeWeek, hidesWeekend: false, step: stepByDays(DAYS_PER_WEEK),
-      cssClass: 'wkmode', needsAgenda: true, swipes: true, draw: renderWeek
-    },
-    [MODE.PERIOD]: {
-      days: workDays, hidesWeekend: false, step: stepByPeriod,
-      cssClass: 'cymode', needsAgenda: false, swipes: false, draw: renderPeriodView
-    },
-    [MODE.LIST]: {
-      days: workDays, hidesWeekend: false, step: stepByDays(DAYS_PER_WEEK),
-      cssClass: 'listmode', needsAgenda: false, swipes: false, draw: renderListView
-    }
-  };
-  // The view settings are read back from this device unchecked, so an unknown saved mode can occur.
-  const currentView = () => VIEWS[View.mode] || VIEWS[MODE.WORKWEEK];
-  const VIEW_CLASSES = [...new Set(Object.values(VIEWS).map(view => view.cssClass))];
 
   // The parts of the page views draw in. Only the view on screen has content; the others are emptied,
   // not left hidden.
   const SURFACES = [
-    { draw: renderPeriodView, elements: ['cycleView'] },
-    { draw: renderListView, elements: ['listView'] },
-    { draw: renderWeek, elements: ['head', 'body', 'cycleLane'] }
+    { name: SURFACE.PERIOD, draw: renderPeriodView, elements: ['cycleView'] },
+    { name: SURFACE.LIST, draw: renderListView, elements: ['listView'] },
+    { name: SURFACE.WEEK, draw: renderWeek, elements: ['head', 'body', 'cycleLane'] }
   ];
-
-  const calDays = () => currentView().days(View.date);
-
-  /* ---------- periods as shown ---------- */
-
-  const isRunning = period => td() >= period.start && td() <= period.end;
-  const isHiddenDay = day => currentView().hidesWeekend && M.isWeekend(day);
-
-  // In Werkweek, Saturday and Sunday are hidden: a period's span then starts and ends on a weekday.
-  function spanText(period) {
-    let first = period.start, last = period.end;
-    while (first <= last && isHiddenDay(first)) first = M.addDays(first, 1);
-    while (last >= first && isHiddenDay(last)) last = M.addDays(last, -1);
-    if (first > last) { first = period.start; last = period.end; }
-    return t('time.span', { a: UI.fmtSp(first), z: UI.fmtSp(last) });
-  }
-  // Whether the period goes on, before or after these days, on a day that is shown.
-  function moreVisible(period, days, back) {
-    const direction = back ? -1 : 1;
-    let day = M.addDays(back ? days[0] : days[days.length - 1], direction);
-    while (back ? day >= period.start : day <= period.end) {
-      if (!isHiddenDay(day)) return true;
-      day = M.addDays(day, direction);
-    }
-    return false;
-  }
-  // The period the calendar date is in, and the next ones.
-  function periodWindow() {
-    const periods = [];
-    let period = Store.periodAt(View.date);
-    while (period && periods.length < PERIODS_SHOWN) {
-      periods.push(period);
-      period = Store.periodAt(M.addDays(period.end, 1));
-    }
-    return periods;
-  }
-  const inPeriodWindow = key => periodWindow().some(period => period.key === key);
-  const periodPlace = period => ({ period: period.key });
-
-  const yearOf = date => date.slice(0, 4);
-  const yearSuffix = date => (yearOf(date) === yearOf(td()) ? '' : ' ' + yearOf(date));
 
   /* ---------- the bar on top ---------- */
 
@@ -173,9 +82,9 @@ const Calendar = (() => {
   /* ---------- render ---------- */
 
   function drawCurrentView() {
-    const { draw } = currentView();
+    const shown = currentView().surface;
     for (const surface of SURFACES) {
-      if (surface.draw === draw) surface.draw();
+      if (surface.name === shown) surface.draw();
       else surface.elements.forEach(id => { $(id).innerHTML = ''; });
     }
   }
@@ -185,7 +94,7 @@ const Calendar = (() => {
     $('modeCycle').hidden = !Store.periodActive();
     App.syncSide();
     const weekView = $('weekView'), { cssClass } = currentView();
-    VIEW_CLASSES.forEach(name => weekView.classList.toggle(name, name === cssClass));
+    viewClasses.forEach(name => weekView.classList.toggle(name, name === cssClass));
     if (View.mode === MODE.PERIOD && !Store.periodAt(View.date)) View.date = Store.segments()[0].from;
     // An open card lives in a column that is about to be replaced: it closes first. A mark after a
     // jump has no card and stays.
@@ -416,8 +325,6 @@ const Calendar = (() => {
   }
 
   return {
-    init, render, spanText, closePop, reapplyFocus, calDays,
-    // for the calendar pieces (calendar-week.js, -period.js, -list.js, -card.js)
-    isRunning, moreVisible, periodWindow, inPeriodWindow, periodPlace, yearOf, yearSuffix
+    init, render, closePop, reapplyFocus
   };
 })();

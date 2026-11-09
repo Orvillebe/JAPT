@@ -144,7 +144,9 @@ const CalendarWeek = (() => {
   function coveredTasksHtml(ids) {
     if (!ids.length) return '';
     const titles = ids.map(id => (Store.task(id) || {}).title).filter(Boolean).join(', ');
-    return `<div class="covered" title="${esc(titles)}">${UI.tn('cal.covered_tasks', ids.length)}</div>`;
+    const label = UI.tn('cal.covered_tasks', ids.length);
+    const covered = ids.join(' ');
+    return `<button type="button" class="covered" data-covered="${covered}" title="${esc(titles)}">${label}</button>`;
   }
   const MEETING_GAP_PX = 3;
   const SHORT_MINUTES = 45;   // shorter is just room for its times and one task, so both get smaller
@@ -249,5 +251,22 @@ const CalendarWeek = (() => {
     byPlace.forEach(pieces => (pieces.length > 1 ? fitOverPieces(pieces) : pieces.forEach(fitPiece)));
   }
 
-  return { renderWeek, fitBlocks, chip, xBtn, dropHere, periodTaskChip };
+  // Clicking the message: one task opens right away, several first show which ones. The list exists only
+  // while it is open.
+  function closeCoveredList() {
+    const open = document.querySelector('.coveredlist');
+    if (open) open.remove();
+    return !!open;
+  }
+  function openCovered(button) {
+    const wasOpen = closeCoveredList();
+    const ids = button.dataset.covered.split(' ');
+    if (ids.length === 1) { Tasks.openEdit(ids[0]); return; }
+    if (wasOpen) return;
+    const row = id => `<button type="button" data-edit="${id}">${esc(Store.task(id).title)}</button>`;
+    const rows = ids.map(row).join('');
+    button.insertAdjacentHTML('afterend', `<div class="coveredlist">${rows}</div>`);
+  }
+
+  return { openCovered, closeCoveredList, renderWeek, fitBlocks, chip, xBtn, dropHere, periodTaskChip };
 })();

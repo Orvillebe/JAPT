@@ -175,6 +175,9 @@ const Calendar = (() => {
     closePop(!control && !e.target.closest('.side') && !!e.target.closest('#weekView'));
   }
   async function onPlanClick(e) {
+    const covered = e.target.closest('[data-covered]');
+    if (covered) { CalendarWeek.openCovered(covered); return; }
+    CalendarWeek.closeCoveredList();
     const goto = e.target.closest('[data-goto]');
     if (goto) { jump(M.parsePlace(goto.dataset.goto), goto.dataset.gotask); return; }
     const taskOf = el => el.closest('[data-task]').dataset.task;
@@ -189,6 +192,7 @@ const Calendar = (() => {
   function initClicks() {
     document.addEventListener('click', onFocusClick);
     UI.onEscape(() => closePop(true));
+    UI.onEscape(CalendarWeek.closeCoveredList);
     document.addEventListener('scroll', e => {
       if (e.target.classList && e.target.classList.contains('list')) closePop(true);
     }, true);

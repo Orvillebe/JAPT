@@ -689,8 +689,8 @@ input,textarea,select{color:var(--text)}
 .dragging-any .meeting{pointer-events:none}   /* slepen gaat door de meeting heen naar het blok eronder */
 
 .block.noroom{background:transparent}
-.block.short{padding:3px 6px}
-.block.short .bh{display:none}   /* een halfuur: de plaats gaat naar de taak, de uren staan in de tooltip */
+.block.short,.block.short-now{padding:3px 6px}
+.block.short .bh,.block.short-now .bh{display:none}   /* een halfuur: de plaats gaat naar de taak, de uren staan in de tooltip */
 .covered{position:absolute;z-index:3;right:6px;bottom:6px;padding:1px 8px;border-radius:9px;background:var(--panel);border:1px solid var(--line);font-size:12px;color:var(--block-ink)}   /* boven de meeting: de taken blijven ingepland */
 
 /* Beheer: de tabbladen als menu links, zodat negen woorden niet over twee rijen breken */

@@ -18,17 +18,14 @@
 function createLocalData() {
   const KEY = 'japt_local_v1';
   const ME = 'local-user';
-  // Tables with a Bin (deletedAt): tasks, goals, clients. The others are deleted for good.
-  const TABLES = ['members', 'clients', 'goals', 'tasks', 'task_members', 'work_blocks', 'block_placements',
-    'period_segments', 'period_placements', 'calendars', 'app_settings', 'test_meetings'];
-  const BINNED = ['clients', 'goals', 'tasks'];
+  const LOCAL_TABLES = [...TABLES, 'test_meetings'];   // meetings from the test data, only here
   const now = () => new Date().toISOString();
   const copy = o => JSON.parse(JSON.stringify(o));
 
   // The same steps as the files in migrations/, for data in this browser. Step n brings data from
   // version n - 1 to version n. Never change a step that has shipped; add a new one.
   const LOCAL_MIGRATIONS = {
-    1: db => { TABLES.forEach(t => { db[t] = db[t] || []; }); }
+    1: db => { LOCAL_TABLES.forEach(t => { db[t] = db[t] || []; }); }
   };
 
   function upgrade(db) {
@@ -40,7 +37,7 @@ function createLocalData() {
 
   // An empty start: one local member, so there is someone to put on tasks.
   function seed() {
-    const db = Object.fromEntries(TABLES.map(t => [t, []]));
+    const db = Object.fromEntries(LOCAL_TABLES.map(t => [t, []]));
     db.schemaVersion = SCHEMA_VERSION;
     db.members.push({ id: ME, name: 'Lokaal', color: '#cf6a52', allowed: true, removedAt: null, createdAt: now() });
     return db;
@@ -52,7 +49,7 @@ function createLocalData() {
       if (raw) {
         const db = JSON.parse(raw), before = db.schemaVersion || 0;
         upgrade(db);
-        TABLES.forEach(t => { db[t] = db[t] || []; });
+        LOCAL_TABLES.forEach(t => { db[t] = db[t] || []; });
         if (db.schemaVersion !== before) write(db);
         return db;
       }
@@ -61,7 +58,9 @@ function createLocalData() {
   }
   function write(db) { localStorage.setItem(KEY, JSON.stringify(db)); }
 
-  class Conflict extends Error { constructor(table, id) { super(`Changed meanwhile: ${table} ${id}`); this.code = 'conflict'; } }
+  class Conflict extends Error {
+    constructor(table, id) { super(`Changed meanwhile: ${table} ${id}`); this.code = 'conflict'; }
+  }
 
   // Apply one change to db. Throws on a missing row or a conflict, so the whole batch is refused.
   function applyOp(db, o, at) {
@@ -77,7 +76,10 @@ function createLocalData() {
     }
     const i = rows.findIndex(r => r.id === o.id);
     if (o.op === 'upsert') {
-      if (i < 0) { const full = { createdAt: at, createdBy: ME, changedAt: at, changedBy: ME, id: o.id, ...o.fields }; rows.push(full); return full; }
+      if (i < 0) {
+        const full = { createdAt: at, createdBy: ME, changedAt: at, changedBy: ME, id: o.id, ...o.fields };
+        rows.push(full); return full;
+      }
       Object.assign(rows[i], o.fields, { changedAt: at, changedBy: ME }); return rows[i];
     }
     if (i < 0) { if (o.op === 'remove') return null; throw new Error(`Not found: ${o.table} ${o.id}`); }
@@ -96,15 +98,15 @@ function createLocalData() {
     // Everything the app works with. Binned records stay out; only the Bin asks for them.
     async loadAll() {
       const db = read(), out = {};
-      for (const t of TABLES) out[t] = BINNED.includes(t) ? db[t].filter(r => !r.deletedAt) : db[t];
+      for (const t of LOCAL_TABLES) out[t] = BINNED_TABLES.includes(t) ? db[t].filter(r => !r.deletedAt) : db[t];
       const live = new Set(out.tasks.map(k => k.id));
-      for (const t of ['task_members', 'block_placements', 'period_placements']) out[t] = out[t].filter(r => live.has(r.taskId));
+      for (const t of TASK_TABLES) out[t] = out[t].filter(r => live.has(r.taskId));
       return copy(out);
     },
 
     async loadBin() {
       const db = read();
-      return copy(Object.fromEntries(BINNED.map(t => [t, db[t].filter(r => r.deletedAt)])));
+      return copy(Object.fromEntries(BINNED_TABLES.map(t => [t, db[t].filter(r => r.deletedAt)])));
     },
 
     // Several changes at once, all or nothing:
@@ -122,8 +124,8 @@ function createLocalData() {
     async purgeBin(beforeIso) {
       const db = read(), old = r => r.deletedAt && r.deletedAt < beforeIso;
       const gone = new Set(db.tasks.filter(old).map(k => k.id));
-      for (const t of BINNED) db[t] = db[t].filter(r => !old(r));
-      for (const t of ['task_members', 'block_placements', 'period_placements']) db[t] = db[t].filter(r => !gone.has(r.taskId));
+      for (const t of BINNED_TABLES) db[t] = db[t].filter(r => !old(r));
+      for (const t of TASK_TABLES) db[t] = db[t].filter(r => !gone.has(r.taskId));
       write(db);
     },
 
@@ -142,7 +144,7 @@ function createLocalData() {
       const db = { ...copy(backup.data), schemaVersion: backup.schemaVersion || 0 };
       delete db.schema_migrations;
       upgrade(db);
-      TABLES.forEach(t => { db[t] = db[t] || []; });
+      LOCAL_TABLES.forEach(t => { db[t] = db[t] || []; });
       return db;
     },
     clear() { localStorage.removeItem(KEY); }

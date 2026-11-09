@@ -195,14 +195,18 @@ function createModel(CFG) {
 
   /* ---------- lists ---------- */
 
+  // Where a task was put (stored), and the list it shows in (worked out, see listOf).
+  const STAGE = Object.freeze({ INBOX: 'inbox', OPEN: 'open', BACKLOG: 'backlog' });
+  const LIST = Object.freeze({ INBOX: 'inbox', OPEN: 'open', PLANNED: 'planned', DONE: 'done', BACKLOG: 'backlog' });
+
   // Calculated, never stored: done wins; then planned (a block, or a period that exists); else the stage.
   // A task only planned in the past still counts as planned (accepted for now, docs/design.md).
   function listOf(task, idx) {
-    if (task.doneOn) return 'done';
-    if (task.stage === 'inbox') return 'inbox';
+    if (task.doneOn) return LIST.DONE;
+    if (task.stage === STAGE.INBOX) return LIST.INBOX;
     const p = idx.of(task.id);
-    if (p.blocks.length || p.periods.length) return 'planned';
-    return task.stage === 'backlog' ? 'backlog' : 'open';
+    if (p.blocks.length || p.periods.length) return LIST.PLANNED;
+    return task.stage === STAGE.BACKLOG ? LIST.BACKLOG : LIST.OPEN;
   }
   // A deadline within the reminder days brings a task to the top of Nog niet ingepland.
   const dueSoon = (task, days, td = today()) => !!task.deadline && !task.doneOn && td >= addDays(task.deadline, -days);
@@ -224,7 +228,7 @@ function createModel(CFG) {
   // The list a task shows in: a due-soon backlog task is shown in Nog niet ingepland, its stage stays.
   const shownList = (task, idx, days, td) => {
     const l = listOf(task, idx);
-    return l === 'backlog' && dueSoon(task, days, td) ? 'open' : l;
+    return l === LIST.BACKLOG && dueSoon(task, days, td) ? LIST.OPEN : l;
   };
 
   // Planning in the past checks a task off, on the day of the block or the last day of the period.
@@ -317,7 +321,7 @@ function createModel(CFG) {
     blockOnDate, blocksOn, currentBlocks, blockRevision, blockProblem, fitBlock,
     periodIn, nextPeriodStart,
     placeKey, placeText, parsePlace, samePlace,
-    planIndex, listOf, dueSoon, isLate, onlyPlannedInPast, shownList, pastDoneDate,
+    planIndex, STAGE, LIST, listOf, dueSoon, isLate, onlyPlannedInPast, shownList, pastDoneDate,
     parseRepeat, nextDeadline,
     between, positionAt,
     passes, filterCount,

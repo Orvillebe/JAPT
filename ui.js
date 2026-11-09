@@ -19,6 +19,10 @@ const UI = (() => {
   const $ = id => document.getElementById(id);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const cap = x => x.charAt(0).toUpperCase() + x.slice(1);
+  // For HTML over several lines: the line breaks and indents of the code don't end up in the page.
+  // Values are put in as they are, so typed text still goes through esc().
+  const html = (strings, ...values) =>
+    strings.map((s, i) => s.replace(/\n\s*/g, '') + (i < values.length ? values[i] : '')).join('');
   const tn = (key, n, vars = {}) => t(key + (n === 1 ? '.one' : '.many'), { n, ...vars });
   // The phone layout, the same width as the @media rules in style.css. Pop-ups also go full screen on a
   // low screen (a phone turned sideways).
@@ -29,6 +33,7 @@ const UI = (() => {
 
   // Personal view settings stay on the device, never in the database (docs/design.md).
   const VIEW_KEY = 'japt_view';
+  const MODE = Object.freeze({ DAY: 'day', WORKWEEK: 'workweek', WEEK: 'week', PERIOD: 'cycle', LIST: 'list' });
   const NO_FILTER = () => ({ q: '', who: [], goal: [], client: [] });
   const View = (() => {
     const d = { page: 'tasks', mode: 'workweek', groupBy: 'none', filter: NO_FILTER(), fold: {}, sbHidden: false, showAchieved: false, ibTab: 'add' };
@@ -452,6 +457,7 @@ const UI = (() => {
   }
 
   return {
+    html, MODE,
     $, esc, cap, tn, PHONE, View,
     wd, wdLong, mshort, mname, dnum, fmtSp, fmtDay, fmt, span,
     lightOf, pstyle, uname, avatar, goalStyle, taskStyle, hueStyle, hueColour, goalDot, NOGOAL,

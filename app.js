@@ -10,6 +10,7 @@
  *   i18n/nl.js, i18n.js  - all interface text, by key
  *   model.js             - pure rules: dates, blocks, periods, lists, deadlines, repeats, order, filters
  *   id.js                - new ids, made in the app
+ *   tables.js            - the names of the database tables
  *   data-local.js        - storage in this browser (testing)
  *   data-service.js      - picks the data layer (Supabase on the live address: next build step)
  *   store.js             - data in memory, every action as one save with its undo

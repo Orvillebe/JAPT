@@ -13,7 +13,7 @@ const path = require('path');
 const vm = require('vm');
 const nodeCrypto = require('crypto');
 
-const FILES = ['config.js', 'version.js', 'model.js', 'id.js', 'data-local.js', 'data-service.js', 'store.js'];
+const FILES = ['config.js', 'version.js', 'model.js', 'id.js', 'tables.js', 'data-local.js', 'data-service.js', 'store.js'];
 const scripts = FILES.map(f => new vm.Script(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), { filename: f }));
 
 const TODAY = '2026-11-04', YESTERDAY = '2026-11-03', TOMORROW = '2026-11-05', NEXT_MONDAY = '2026-11-09', LAST_MONDAY = '2026-10-26';

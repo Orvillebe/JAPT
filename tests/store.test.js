@@ -396,6 +396,31 @@ test('planning it elsewhere gives up the covered place', async () => {
   eq(S.idx().of('a').blocks.length, 1);
 });
 
+test('a drop in a part of a block remembers the part', async () => {
+  const { S, stored } = await app({ tasks: [task('a')] });
+  await S.plan('a', { date: NEXT_MONDAY, blockId: 'ma' }, { partStart: 660 });
+  eq((await stored('block_placements'))[0].partStart, 660);
+});
+test('moving within the block changes the part, and undo puts it back', async () => {
+  const { S, stored } = await app({ tasks: [task('a')], block_placements: [{ ...inBlock('p1', 'a', NEXT_MONDAY, 'ma'), partStart: 540 }] });
+  const place = { date: NEXT_MONDAY, blockId: 'ma' };
+  const { undo } = await S.plan('a', place, { from: place, partStart: 660 });
+  eq((await stored('block_placements'))[0].partStart, 660);
+  await undo();
+  eq((await stored('block_placements'))[0].partStart, 540);
+});
+test('dropped from a list on a block it is already in: only the part changes', async () => {
+  const { S, stored } = await app({ tasks: [task('a')], block_placements: [inBlock('p1', 'a', NEXT_MONDAY, 'ma')] });
+  await S.plan('a', { date: NEXT_MONDAY, blockId: 'ma' }, { partStart: 660 });
+  const ps = await stored('block_placements');
+  eq([ps.length, ps[0].partStart], [1, 660]);
+});
+test('a drop without a part leaves it empty', async () => {
+  const { S, stored } = await app({ tasks: [task('a')] });
+  await S.plan('a', { date: NEXT_MONDAY, blockId: 'ma' });
+  assert.ok(!(await stored('block_placements'))[0].partStart);
+});
+
 /* ---------- repeats ---------- */
 
 test('checking off a repeating task makes the next one in the Backlog, with its people', async () => {

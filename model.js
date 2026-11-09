@@ -134,6 +134,16 @@ function createModel(CFG) {
     return parts.filter(p => p.end - p.start >= minLength);
   }
 
+  // Which free part a task put at this minute belongs in: the part holding that minute, else the next one,
+  // else the last. Null when it was never put in a part: it then fills the parts from the top.
+  function partFor(parts, minute) {
+    if (minute === null || minute === undefined) return null;
+    const holding = parts.findIndex(p => p.start <= minute && minute < p.end);
+    if (holding >= 0) return holding;
+    const next = parts.findIndex(p => p.start > minute);
+    return next >= 0 ? next : parts.length - 1;
+  }
+
   /* ---------- work periods ---------- */
 
   // Segments {from, length, unit}: unit 'd' (length in days) or 'm' (months). Each segment is a row of
@@ -366,7 +376,7 @@ function createModel(CFG) {
     parseD, toDs, addDays, addMonths, daysBetween, daysIn, weekday, today, setToday, localDs,
     setWeekStart, getWeekStart, weekFirst, weekDays, isWeekend, weekOrder,
     SNAP, MINLEN, snap, hhmm, hhmm2, parseHm,
-    sideBySide, freeParts, MIN_FREE_MINUTES, blockOnDate, blocksOn, currentBlocks, blockRevision, blockProblem, fitBlock,
+    sideBySide, freeParts, partFor, MIN_FREE_MINUTES, blockOnDate, blocksOn, currentBlocks, blockRevision, blockProblem, fitBlock,
     periodIn, nextPeriodStart,
     placeKey, placeText, parsePlace, samePlace,
     planIndex, STAGE, LIST, listOf, dueSoon, isLate, onlyPlannedInPast, shownList, pastDoneDate,

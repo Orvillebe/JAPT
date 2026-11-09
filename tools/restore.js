@@ -50,7 +50,7 @@ function buildRestoreSql(backup, upgradeBackup, schemaVersion, typedTeamName, { 
     },
     task_members: { id: 'T', task_id: 'T', member_id: 'T' },
     work_blocks: { id: 'T', day: 'N', start_min: 'N', end_min: 'N', label: 'T', valid_from: 'd', valid_to: 'd', owner: 't' },
-    block_placements: { id: 'T', task_id: 'T', block_id: 'T', on_date: 'd', position: 'N' },
+    block_placements: { id: 'T', task_id: 'T', block_id: 'T', on_date: 'd', position: 'N', part_start: 'n' },
     period_segments: { id: 'T', from_date: 'd', length: 'N', unit: 'T' },
     period_placements: { id: 'T', task_id: 'T', period_start: 'd', position: 'N' },
     calendars: { id: 'T', name: 'T', url: 'T', owner: 't' },

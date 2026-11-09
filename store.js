@@ -386,10 +386,11 @@ const Store = (() => {
   //   fromPeriod  dragged from the period view (that period's first day): a task with several blocks
   //               in that period moves as one
   //   mark        {id, after}: next to which task it was dropped, for the order
+  //   partStart   the free part of a block with a meeting in it where it was dropped (docs/design.md, Meetings)
   const coveredPlacement = p => { const b = find('work_blocks', p.blockId); return !!b && isCovered(p.date, b); };
   const placementTable = place => (place.period ? 'period_placements' : 'block_placements');
   const blocksInPeriod = (taskId, per) => idx().of(taskId).blocks.filter(b => b.date >= per.start && b.date <= per.end);
-  async function plan(taskId, to, { from = null, fromPeriod = null, mark = null } = {}) {
+  async function plan(taskId, to, { from = null, fromPeriod = null, mark = null, partStart } = {}) {
     const k = task(taskId), I = idx(), ops = [];
     const posFor = () => {
       const others = I.tasksIn(to).filter(x => x !== taskId)
@@ -397,7 +398,8 @@ const Store = (() => {
       return M.positionAt(others, mark ? mark.id : null, mark ? mark.after : true);
     };
     if (M.samePlace(from, to)) {   // the same block or period: only the order changes
-      return run({ ops: mark ? [upd(placementTable(to), I.placement(to, taskId).id, { position: posFor() })] : [] });
+      const fields = { ...(mark ? { position: posFor() } : {}), ...(partStart !== undefined ? { partStart } : {}) };
+      return run({ ops: Object.keys(fields).length ? [upd(placementTable(to), I.placement(to, taskId).id, fields)] : [] });
     }
     const drop = (table, id) => { if (!ops.some(o => o.id === id)) ops.push(del(table, id)); };
     const out = place => { const p = I.placement(place, taskId); if (p) drop(placementTable(place), p.id); };
@@ -414,7 +416,11 @@ const Store = (() => {
     if (!already || ops.some(o => o.id === already.id)) {
       ops.push(to.period
         ? ins('period_placements', { taskId, periodStart: to.period, position: posFor() })
-        : ins('block_placements', { taskId, date: to.date, blockId: to.blockId, position: posFor() }));
+        : ins('block_placements', {
+          taskId, date: to.date, blockId: to.blockId, position: posFor(), ...(partStart !== undefined ? { partStart } : {})
+        }));
+    } else if (partStart !== undefined) {
+      ops.push(upd('block_placements', already.id, { partStart }));
     }
     const parts = [{ ops }];
     const tf = {};

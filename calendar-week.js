@@ -147,13 +147,13 @@ const CalendarWeek = (() => {
     return `<div class="covered" title="${esc(titles)}">${UI.tn('cal.covered_tasks', ids.length)}</div>`;
   }
   const SHORT_MINUTES = 45;   // shorter has room for one task, or for its times, not both: the task goes first
-  function blockPiece(place, from, to, firstHour, label, content, noRoom = false) {
+  function blockPiece(place, from, to, firstHour, label, content, { noRoom = false, part = false } = {}) {
     const position = `top:${topPx(from, firstHour)}px;height:${(to - from) / 60 * PX_PER_HOUR}px`;
     const short = to - from < SHORT_MINUTES ? 'short' : '';
     const times = UI.span(UI.fmt(from), UI.fmt(to));
     return html`
       <div class="block ${short} ${noRoom ? 'noroom' : ''}" ${noRoom ? 'data-noroom' : ''} title="${short ? times : ''}"
-        data-place="${P(place)}" style="${position}">
+        ${part ? `data-part-from="${from}" data-part-to="${to}"` : ''} data-place="${P(place)}" style="${position}">
         <div class="bh">${label}<span>${UI.span(UI.fmt(from), UI.fmt(to))}</span></div>
         ${content}
       </div>`;
@@ -166,11 +166,12 @@ const CalendarWeek = (() => {
     const label = block.label ? `<span>${esc(block.label)}</span>` : '';
     const parts = M.freeParts(block, meetings);
     if (!parts.length) {
-      return blockPiece(place, block.start, block.end, firstHour, label, coveredTasksHtml(ids), true);
+      return blockPiece(place, block.start, block.end, firstHour, label, coveredTasksHtml(ids), { noRoom: true });
     }
+    const isPart = parts.length > 1 || parts[0].start !== block.start || parts[0].end !== block.end;
     return parts.map((part, i) => {
       const content = `<div class="list">${i === 0 ? chips || dropHere() : dropHere()}</div>`;
-      return blockPiece(place, part.start, part.end, firstHour, i === 0 ? label : '', content);
+      return blockPiece(place, part.start, part.end, firstHour, i === 0 ? label : '', content, { part: isPart });
     }).join('');
   }
   function dayColumnHtml(day, firstHour, lastHour) {
@@ -208,11 +209,17 @@ const CalendarWeek = (() => {
     piece.classList.add('snug');
     if (overflows(list)) { piece.classList.remove('snug'); piece.classList.add('tight'); }
   }
-  // Tasks fill the pieces of a block from the top. A piece first makes its cards smaller; only what then still
-  // doesn't fit moves on to the next piece, in order. A task never leaves a piece on its own.
+  // Each task goes to the part it was put in; one that was never put in a part fills from the top. A piece first
+  // makes its cards smaller; only what then still doesn't fit moves on to the next piece, in order.
   function fitOverPieces(pieces) {
     const lists = pieces.map(piece => piece.querySelector('.list'));
-    pieces.flatMap(piece => [...piece.querySelectorAll('.chip')]).forEach(chip => lists[0].appendChild(chip));
+    const place = M.parsePlace(pieces[0].dataset.place), I = Store.idx();
+    const parts = pieces.map(p => ({ start: +p.dataset.partFrom, end: +p.dataset.partTo }));
+    const chips = new Map(pieces.flatMap(p => [...p.querySelectorAll('.chip')]).map(c => [c.dataset.task, c]));
+    I.tasksIn(place).filter(id => chips.has(id)).forEach(id => {
+      const part = M.partFor(parts, I.placement(place, id).partStart);
+      lists[part === null ? 0 : part].appendChild(chips.get(id));
+    });
     pieces.forEach((piece, i) => {
       const list = lists[i], next = lists[i + 1];
       if (list.querySelector('.chip')) list.querySelectorAll('.empty').forEach(el => el.remove());

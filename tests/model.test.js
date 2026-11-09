@@ -130,6 +130,17 @@ test('several meetings, also overlapping ones', () => {
     [{ start: 540, end: 600 }, { start: 690, end: 720 }, { start: 750, end: 780 }]);
 });
 
+const TWO_PARTS = [{ start: 900, end: 960 }, { start: 1020, end: 1050 }];
+test('a task goes to the part holding its minute', () => {
+  eq(M.partFor(TWO_PARTS, 900), 0); eq(M.partFor(TWO_PARTS, 1020), 1);
+});
+test('never put in a part: no preference', () => eq(M.partFor(TWO_PARTS, null), null));
+test('its part is taken: the next part, else the last', () => {
+  eq(M.partFor(TWO_PARTS, 970), 1);
+  eq(M.partFor([{ start: 900, end: 960 }], 1020), 0);
+  eq(M.partFor(TWO_PARTS, 1060), 1);
+});
+
 /* ---------- lists ---------- */
 
 const blocks = [B('wo', 3, 9, 12, { validFrom: '2026-01-01' }), B('ma', 1, 9, 12, { validFrom: '2026-01-01' })];

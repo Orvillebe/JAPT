@@ -26,7 +26,8 @@ function createLocalData() {
   // version n - 1 to version n. Never change a step that has shipped; add a new one.
   const LOCAL_MIGRATIONS = {
     1: db => { LOCAL_TABLES.forEach(t => { db[t] = db[t] || []; }); },
-    2: () => {}   // migration 002 only adds a check to the real database
+    2: () => {},   // migration 002 only adds a check to the real database
+    3: () => {}    // migration 003 adds an optional field
   };
 
   function upgrade(db) {

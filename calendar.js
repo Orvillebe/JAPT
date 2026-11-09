@@ -166,7 +166,9 @@ const Calendar = (() => {
     async drop(host, d, spot) {
       const mark = spot ? { id: spot.el.dataset.task, after: spot.after } : null;
       const place = M.parsePlace(host.dataset.place);
-      const res = await UI.act(() => Store.plan(d.task, place, { from: d.from, fromPeriod: d.fromPeriod, mark }));
+      const partStart = host.dataset.partFrom !== undefined ? +host.dataset.partFrom : undefined;
+      const options = { from: d.from, fromPeriod: d.fromPeriod, mark, partStart };
+      const res = await UI.act(() => Store.plan(d.task, place, options));
       if (res) Tasks.notes(res.notes, d.task);
     }
   };

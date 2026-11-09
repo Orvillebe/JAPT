@@ -689,9 +689,7 @@ input,textarea,select{color:var(--text)}
 .block.short .empty{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .block.short.nohead{padding:6px}   /* zonder uren: de taak staat midden in het stuk */
 .covered{position:absolute;z-index:3;right:6px;bottom:6px;padding:1px 8px;border-radius:9px;background:var(--panel);border:1px solid var(--line);font:inherit;font-size:12px;color:var(--block-ink);cursor:pointer}   /* boven de meeting: de taken blijven ingepland */
-.coveredlist{position:absolute;z-index:4;right:6px;bottom:32px;display:flex;flex-direction:column;gap:2px;padding:4px;max-width:260px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 22px rgba(0,0,0,.2)}
-.coveredlist button{border:0;background:none;text-align:left;padding:5px 8px;font:inherit;font-size:13px;border-radius:6px}
-.coveredlist button:hover{background:var(--hover-bg)}
+.coveredlist{position:absolute;z-index:4;right:6px;bottom:32px;display:flex;flex-direction:column;gap:4px;padding:6px;width:240px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 22px rgba(0,0,0,.2)}
 
 /* Beheer: de tabbladen als menu links, zodat negen woorden niet over twee rijen breken */
 dialog.manage{width:min(960px,94vw)}

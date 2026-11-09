@@ -251,21 +251,18 @@ const CalendarWeek = (() => {
     byPlace.forEach(pieces => (pieces.length > 1 ? fitOverPieces(pieces) : pieces.forEach(fitPiece)));
   }
 
-  // Clicking the message: one task opens right away, several first show which ones. The list exists only
-  // while it is open.
+  // Clicking the message shows the tasks as they would stand in the block: click one for its card. The list
+  // exists only while it is open.
   function closeCoveredList() {
     const open = document.querySelector('.coveredlist');
     if (open) open.remove();
     return !!open;
   }
   function openCovered(button) {
-    const wasOpen = closeCoveredList();
-    const ids = button.dataset.covered.split(' ');
-    if (ids.length === 1) { Tasks.openEdit(ids[0]); return; }
-    if (wasOpen) return;
-    const row = id => `<button type="button" data-edit="${id}">${esc(Store.task(id).title)}</button>`;
-    const rows = ids.map(row).join('');
-    button.insertAdjacentHTML('afterend', `<div class="coveredlist">${rows}</div>`);
+    if (closeCoveredList()) return;
+    const place = M.parsePlace(button.closest('[data-place]').dataset.place);
+    const chips = button.dataset.covered.split(' ').map(id => blockChip(id, place)).join('');
+    button.insertAdjacentHTML('afterend', `<div class="coveredlist">${chips}</div>`);
   }
 
   return { openCovered, closeCoveredList, renderWeek, fitBlocks, chip, xBtn, dropHere, periodTaskChip };

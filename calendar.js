@@ -177,7 +177,7 @@ const Calendar = (() => {
   async function onPlanClick(e) {
     const covered = e.target.closest('[data-covered]');
     if (covered) { CalendarWeek.openCovered(covered); return; }
-    CalendarWeek.closeCoveredList();
+    if (!e.target.closest('.coveredlist')) CalendarWeek.closeCoveredList();
     const goto = e.target.closest('[data-goto]');
     if (goto) { jump(M.parsePlace(goto.dataset.goto), goto.dataset.gotask); return; }
     const taskOf = el => el.closest('[data-task]').dataset.task;

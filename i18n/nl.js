@@ -121,6 +121,8 @@ const NL = {
   'cal.filter_on': 'filter actief',
   'cal.rotate': 'Draai je gsm voor deze weergave',
   'cal.drop_here': 'Sleep hier taken naartoe',
+  'cal.covered_tasks.one': '1 taak onder deze meeting',
+  'cal.covered_tasks.many': '{n} taken onder deze meeting',
   'cal.out_of_block': 'Haal uit blok',
   'cal.out_of_blocks': 'Haal uit de blokken',
   'cal.out_of_period': 'Haal uit werkperiode',

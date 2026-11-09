@@ -105,6 +105,31 @@ test('separate groups don\'t influence each other', () => {
   eq(M.sideBySide([{ start: 540, end: 600 }, { start: 550, end: 590 }, { start: 780, end: 840 }]).map(x => x.lanes), [2, 2, 1]);
 });
 
+const BLOCK = { start: 540, end: 780 };   // 9:00 to 13:00
+test('without a meeting the whole block is free', () => eq(M.freeParts(BLOCK, [], 30), [BLOCK]));
+test('a meeting in the middle leaves a part before and after it', () => {
+  eq(M.freeParts(BLOCK, [{ start: 600, end: 660 }], 30), [{ start: 540, end: 600 }, { start: 660, end: 780 }]);
+});
+test('a meeting over the start or the end leaves one part', () => {
+  eq(M.freeParts(BLOCK, [{ start: 500, end: 600 }], 30), [{ start: 600, end: 780 }]);
+  eq(M.freeParts(BLOCK, [{ start: 700, end: 900 }], 30), [{ start: 540, end: 700 }]);
+});
+test('a meeting that covers the block leaves no room', () => {
+  eq(M.freeParts(BLOCK, [{ start: 500, end: 800 }], 30), []);
+  eq(M.freeParts(BLOCK, [{ start: 540, end: 780 }], 30), []);
+});
+test('a part too short for a task doesn\'t count', () => {
+  eq(M.freeParts(BLOCK, [{ start: 560, end: 780 }], 30), []);
+  eq(M.freeParts(BLOCK, [{ start: 570, end: 780 }], 30), [{ start: 540, end: 570 }]);
+});
+test('a meeting outside the block changes nothing, also when it only touches', () => {
+  eq(M.freeParts(BLOCK, [{ start: 480, end: 540 }, { start: 780, end: 840 }], 30), [BLOCK]);
+});
+test('several meetings, also overlapping ones', () => {
+  eq(M.freeParts(BLOCK, [{ start: 600, end: 660 }, { start: 630, end: 690 }, { start: 720, end: 750 }], 30),
+    [{ start: 540, end: 600 }, { start: 690, end: 720 }, { start: 750, end: 780 }]);
+});
+
 /* ---------- lists ---------- */
 
 const blocks = [B('wo', 3, 9, 12, { validFrom: '2026-01-01' }), B('ma', 1, 9, 12, { validFrom: '2026-01-01' })];

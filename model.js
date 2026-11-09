@@ -119,6 +119,20 @@ function createModel(CFG) {
     return out;
   }
 
+  // The parts of a block no meeting covers and that are at least minLength long, in time order. Tasks are
+  // only placed there: a meeting is time you aren't free.
+  function freeParts(block, meetings, minLength) {
+    let parts = [{ start: block.start, end: block.end }];
+    for (const m of meetings) {
+      parts = parts.flatMap(p => {
+        if (m.end <= p.start || m.start >= p.end) return [p];
+        return [{ start: p.start, end: Math.max(p.start, m.start) }, { start: Math.min(p.end, m.end), end: p.end }]
+          .filter(x => x.end > x.start);
+      });
+    }
+    return parts.filter(p => p.end - p.start >= minLength);
+  }
+
   /* ---------- work periods ---------- */
 
   // Segments {from, length, unit}: unit 'd' (length in days) or 'm' (months). Each segment is a row of
@@ -349,7 +363,7 @@ function createModel(CFG) {
     parseD, toDs, addDays, addMonths, daysBetween, daysIn, weekday, today, setToday, localDs,
     setWeekStart, getWeekStart, weekFirst, weekDays, isWeekend, weekOrder,
     SNAP, MINLEN, snap, hhmm, hhmm2, parseHm,
-    sideBySide, blockOnDate, blocksOn, currentBlocks, blockRevision, blockProblem, fitBlock,
+    sideBySide, freeParts, blockOnDate, blocksOn, currentBlocks, blockRevision, blockProblem, fitBlock,
     periodIn, nextPeriodStart,
     placeKey, placeText, parsePlace, samePlace,
     planIndex, STAGE, LIST, listOf, dueSoon, isLate, onlyPlannedInPast, shownList, pastDoneDate,

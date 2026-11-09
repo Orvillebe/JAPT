@@ -219,7 +219,7 @@ The options that were considered:
 - **Hour range:** the calendar runs from the earliest block or meeting to the latest, at least 8:00 to 18:00, as in the mockup.
 - **Whole-day items** (holidays, birthdays) are left out: the calendar shows hours, and they would cover the work blocks. **Assumption.**
 - **A meeting running past midnight** is shown until the end of its first day.
-- **A meeting during a work block** is drawn over the block: you aren't free at that time. While dragging, a task goes through the meeting into the block under it. Meetings that overlap each other stand side by side.
+- **A meeting during a work block** is drawn over the block, and tasks are never placed under it: you aren't free at that time. Tasks fill the free parts of the block from the top, and a part shorter than 30 minutes doesn't count. A block a meeting covers completely takes no tasks. **Assumption:** tasks that were already planned in a block before a meeting came to cover it stay planned; the meeting says how many, and they stay in the list Ingepland. Meetings that overlap each other stand side by side.
 - **Locally** (testing) the meetings come from the test data. A link entered in the local version is read too, which is harmless because JAPT only reads.
 
 ### Bin

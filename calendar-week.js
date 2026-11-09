@@ -139,14 +139,41 @@ const CalendarWeek = (() => {
     const position = blocks.findIndex(b => b.key === key) + 1;
     return chip(k, place, { side: part(blocks.length, position) + unplanBtn(place, t('cal.out_of_block')) });
   }
-  function blockHtml(day, block, firstHour) {
+  // A part of a block where a task fits; shorter than this is no room (the height of one task).
+  const MIN_FREE_MINUTES = 30;
+  const BLOCK_HEAD_PX = 26, BLOCK_FOOT_PX = 6;   // the block's own top line and bottom edge
+  const isWholeBlock = (parts, block) => parts.length === 1 && parts[0].start === block.start && parts[0].end === block.end;
+
+  // A list per free part, at its own height in the block. Every task starts in the first; fitBlocks spreads them.
+  function freePartLists(block, parts, chips) {
+    return parts.map((part, i) => {
+      const top = Math.max(BLOCK_HEAD_PX, (part.start - block.start) / 60 * PX_PER_HOUR);
+      const bottom = (part.end - block.start) / 60 * PX_PER_HOUR - BLOCK_FOOT_PX;
+      return `<div class="list" style="top:${top}px;height:${bottom - top}px">${i === 0 ? chips || dropHere() : ''}</div>`;
+    }).join('');
+  }
+  // Tasks already planned in a block that a meeting now covers completely: they stay planned, this says so.
+  function coveredTasksHtml(ids) {
+    if (!ids.length) return '';
+    const titles = ids.map(id => (Store.task(id) || {}).title).filter(Boolean).join(', ');
+    return `<div class="covered" title="${esc(titles)}">${UI.tn('cal.covered_tasks', ids.length)}</div>`;
+  }
+  function blockHtml(day, block, firstHour, meetings) {
     const place = { date: day, blockId: block.id };
-    const chips = Store.idx().tasksIn(place).map(id => blockChip(id, place)).join('');
+    const ids = Store.idx().tasksIn(place), chips = ids.map(id => blockChip(id, place)).join('');
     const position = `top:${topPx(block.start, firstHour)}px;height:${heightPx(block)}px`;
     const label = block.label ? `<span>${esc(block.label)}</span>` : '';
+    const head = `<div class="bh">${label}<span>${UI.span(UI.fmt(block.start), UI.fmt(block.end))}</span></div>`;
+    const parts = M.freeParts(block, meetings, MIN_FREE_MINUTES);
+    if (!parts.length) {
+      return `<div class="block noroom" data-noroom data-place="${P(place)}" style="${position}">${head}${coveredTasksHtml(ids)}</div>`;
+    }
+    if (!isWholeBlock(parts, block)) {
+      return `<div class="block split" data-place="${P(place)}" style="${position}">${head}${freePartLists(block, parts, chips)}</div>`;
+    }
     return html`
       <div class="block" data-place="${P(place)}" style="${position}">
-        <div class="bh">${label}<span>${UI.span(UI.fmt(block.start), UI.fmt(block.end))}</span></div>
+        ${head}
         <div class="list">${chips || dropHere()}</div>
       </div>`;
   }
@@ -155,7 +182,7 @@ const CalendarWeek = (() => {
     const today = day === td() ? 'today' : '', off = blocks.length ? '' : 'off', past = day < td() ? 'past' : '';
     const meetings = Agenda.on(day), sides = M.sideBySide(meetings);
     const meetingsHtml = meetings.map((meeting, i) => meetingHtml(meeting, firstHour, sides[i])).join('');
-    const blocksHtml = blocks.map(block => blockHtml(day, block, firstHour)).join('');
+    const blocksHtml = blocks.map(block => blockHtml(day, block, firstHour, meetings)).join('');
     const height = (lastHour - firstHour) * PX_PER_HOUR;
     return html`
       <div class="col ${today} ${off} ${past}" style="--px:${PX_PER_HOUR}px;height:${height}px">
@@ -176,14 +203,26 @@ const CalendarWeek = (() => {
   }
   const ROUNDING_TOLERANCE_PX = 1;   // scrollHeight is rounded: one pixel over still fits
   // Blocks where the tasks don't fit get compact rows instead of a scrollbar.
+  // Tasks fill the free parts of a block from the top; what doesn't fit moves on to the next part, in order.
+  // The last part scrolls when there are more tasks than room.
+  function spreadOverLists(block, lists, overflows) {
+    if (lists.length < 2) return;
+    block.querySelectorAll('.chip').forEach(chip => lists[0].appendChild(chip));
+    lists.slice(0, -1).forEach((list, i) => {
+      while (overflows(list) && list.lastElementChild) lists[i + 1].prepend(list.lastElementChild);
+    });
+  }
+
   function fitBlocks() {
     document.querySelectorAll('#body .block').forEach(block => {
       block.classList.remove('tight', 'snug');
-      const list = block.querySelector('.list');
-      const overflows = () => list && list.scrollHeight > list.clientHeight + ROUNDING_TOLERANCE_PX;
-      if (!overflows()) return;
+      const lists = [...block.querySelectorAll('.list')];
+      if (!lists.length) return;
+      const overflows = list => list.scrollHeight > list.clientHeight + ROUNDING_TOLERANCE_PX;
+      const doesntFit = () => { spreadOverLists(block, lists, overflows); return lists.some(overflows); };
+      if (!doesntFit()) return;
       block.classList.add('snug');
-      if (overflows()) { block.classList.remove('snug'); block.classList.add('tight'); }
+      if (doesntFit()) { block.classList.remove('snug'); block.classList.add('tight'); spreadOverLists(block, lists, overflows); }
     });
   }
 

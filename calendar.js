@@ -152,7 +152,8 @@ const Calendar = (() => {
       const k = Store.task(d.task);
       return !!k && k.stage !== M.STAGE.INBOX;
     },
-    over: (e, host, d) => (amongItsDated(e, host, d) ? false : spotIn(e, host, d)),
+    // A block a meeting covers completely has no room for a task.
+    over: (e, host, d) => (amongItsDated(e, host, d) || 'noroom' in host.dataset ? false : spotIn(e, host, d)),
     async drop(host, d, spot) {
       const mark = spot ? { id: spot.el.dataset.task, after: spot.after } : null;
       const place = M.parsePlace(host.dataset.place);

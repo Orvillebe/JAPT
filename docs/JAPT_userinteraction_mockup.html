@@ -1697,8 +1697,8 @@ document.addEventListener('drop', e=>{
   if(!tg || !drag || S.view === 'inbox') return;
   if(sameDated(e, tg)){ e.preventDefault(); drag = null; clearMarks(); clearSpring(); document.body.classList.remove('dragging-any'); render(); return; }
   e.preventDefault();
-  if(tg.dataset.dropdock || tg.dataset.list){
-    const list = tg.dataset.dropdock || tg.dataset.list, k0 = taskOf(drag.task), mark = dropMark;
+  if(tg.dataset.list){
+    const list = tg.dataset.list, k0 = taskOf(drag.task), mark = dropMark;
     if(!(k0 && SORTABLE.includes(list) && listOf(k0) === list)) setList(drag.task, list);   // binnen dezelfde lijst verandert enkel de volgorde
     if(SORTABLE.includes(list)){
       if(mark) moveTask(drag.task, mark.id, mark.after);

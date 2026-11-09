@@ -680,7 +680,9 @@ input,textarea,select{color:var(--text)}
 .meeting{z-index:2}   /* een meeting staat boven een werkblok: die tijd ben je niet vrij */
 .dragging-any .meeting{pointer-events:none}   /* slepen gaat door de meeting heen naar het blok eronder */
 
-.block.noroom{background:transparent}
+/* helemaal bedekt door meetings: geen vak meer, hooguit de melding erboven */
+.block.noroom,.col.past .block.noroom{border:0;background:none;padding:0;opacity:1}
+.block.noroom .bh{display:none}
 .block.short{padding:0 6px 1px;gap:0}   /* een halfuur: net plaats voor de uren en één taak */
 .block.short .bh{font-size:10.5px;line-height:13px}
 .block.short .chip{padding:2px 8px}

@@ -219,6 +219,7 @@ The options that were considered:
 - **Hour range:** the calendar runs from the earliest block or meeting to the latest, at least 8:00 to 18:00, as in the mockup.
 - **Whole-day items** (holidays, birthdays) are left out: the calendar shows hours, and they would cover the work blocks. **Assumption.**
 - **A meeting running past midnight** is shown until the end of its first day.
+- **A meeting during a work block** stands next to the block, so neither hides the other. Meetings that overlap each other do the same.
 - **Locally** (testing) the meetings come from the test data. A link entered in the local version is read too, which is harmless because JAPT only reads.
 
 ### Bin

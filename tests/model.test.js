@@ -83,6 +83,28 @@ test('monthly periods follow the calendar', () => {
   eq(M.periodIn('2026-03-15', segs).end, '2026-03-30');
 });
 
+test('what doesn\'t overlap keeps the full width, also when it only touches', () => {
+  eq(M.sideBySide([{ start: 540, end: 600 }, { start: 600, end: 660 }]), [{ lane: 0, lanes: 1 }, { lane: 0, lanes: 1 }]);
+});
+test('a meeting during a block stands next to it, the block on the left', () => {
+  eq(M.sideBySide([{ start: 540, end: 750 }, { start: 600, end: 660 }]), [{ lane: 0, lanes: 2 }, { lane: 1, lanes: 2 }]);
+});
+test('also when the meeting starts first, the block keeps its place if it has one', () => {
+  const r = M.sideBySide([{ start: 600, end: 720 }, { start: 540, end: 660 }]);
+  eq(r.map(x => x.lanes), [2, 2]);
+  assert.notStrictEqual(r[0].lane, r[1].lane);
+});
+test('two meetings during a block make three next to each other', () => {
+  eq(M.sideBySide([{ start: 540, end: 750 }, { start: 600, end: 660 }, { start: 630, end: 690 }]).map(x => x.lanes), [3, 3, 3]);
+});
+test('a free lane is used again within a group', () => {
+  const r = M.sideBySide([{ start: 540, end: 750 }, { start: 600, end: 630 }, { start: 660, end: 690 }]);
+  eq(r, [{ lane: 0, lanes: 2 }, { lane: 1, lanes: 2 }, { lane: 1, lanes: 2 }]);
+});
+test('separate groups don\'t influence each other', () => {
+  eq(M.sideBySide([{ start: 540, end: 600 }, { start: 550, end: 590 }, { start: 780, end: 840 }]).map(x => x.lanes), [2, 2, 1]);
+});
+
 /* ---------- lists ---------- */
 
 const blocks = [B('wo', 3, 9, 12, { validFrom: '2026-01-01' }), B('ma', 1, 9, 12, { validFrom: '2026-01-01' })];

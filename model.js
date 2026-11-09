@@ -98,6 +98,27 @@ function createModel(CFG) {
     return e0 <= hi && s0 >= lo ? { start: s0, end: e0 } : null;
   }
 
+  // Blocks and meetings that overlap in time stand side by side, so one never hides the other. For items
+  // {start, end} (minutes), in the same order: {lane, lanes}: its place, and how many stand next to each
+  // other in its group. Items that touch only at the edge don't overlap. Earlier in the list goes further left.
+  function sideBySide(items) {
+    const out = items.map(() => ({ lane: 0, lanes: 1 }));
+    const order = items.map((_, i) => i).sort((a, b) => items[a].start - items[b].start);
+    let group = [], laneEnds = [], groupEnd = -Infinity;
+    const closeGroup = () => { group.forEach(i => { out[i].lanes = laneEnds.length; }); group = []; laneEnds = []; };
+    for (const i of order) {
+      if (items[i].start >= groupEnd) { closeGroup(); groupEnd = -Infinity; }
+      let lane = laneEnds.findIndex(end => end <= items[i].start);
+      if (lane < 0) lane = laneEnds.length;
+      laneEnds[lane] = items[i].end;
+      out[i].lane = lane;
+      group.push(i);
+      groupEnd = Math.max(groupEnd, items[i].end);
+    }
+    closeGroup();
+    return out;
+  }
+
   /* ---------- work periods ---------- */
 
   // Segments {from, length, unit}: unit 'd' (length in days) or 'm' (months). Each segment is a row of
@@ -328,7 +349,7 @@ function createModel(CFG) {
     parseD, toDs, addDays, addMonths, daysBetween, daysIn, weekday, today, setToday, localDs,
     setWeekStart, getWeekStart, weekFirst, weekDays, isWeekend, weekOrder,
     SNAP, MINLEN, snap, hhmm, hhmm2, parseHm,
-    blockOnDate, blocksOn, currentBlocks, blockRevision, blockProblem, fitBlock,
+    sideBySide, blockOnDate, blocksOn, currentBlocks, blockRevision, blockProblem, fitBlock,
     periodIn, nextPeriodStart,
     placeKey, placeText, parsePlace, samePlace,
     planIndex, STAGE, LIST, listOf, dueSoon, isLate, onlyPlannedInPast, shownList, pastDoneDate,

@@ -210,12 +210,18 @@ const CalendarWeek = (() => {
   // Blocks where the tasks don't fit get compact rows instead of a scrollbar.
   const overflows = list => list.scrollHeight > list.clientHeight + ROUNDING_TOLERANCE_PX;
 
-  // More tasks than room: smaller cards first, each piece for itself.
+  // More tasks than room: step by step smaller cards, the same for every task in a piece: first without the
+  // client, then only the title, then also smaller.
+  const FIT_STEPS = ['lean', 'snug', 'tight'];
+  function clearFit(piece) { piece.classList.remove(...FIT_STEPS); }
   function fitPiece(piece) {
     const list = piece.querySelector('.list');
     if (!list || !overflows(list)) return;
-    piece.classList.add('snug');
-    if (overflows(list)) { piece.classList.remove('snug'); piece.classList.add('tight'); }
+    for (const step of FIT_STEPS) {
+      clearFit(piece);
+      piece.classList.add(step);
+      if (!overflows(list)) return;
+    }
   }
   // Each task goes to the part it was put in; one that was never put in a part fills from the top. A piece first
   // makes its cards smaller; only what then still doesn't fit moves on to the next piece, in order.
@@ -234,7 +240,7 @@ const CalendarWeek = (() => {
       fitPiece(piece);
       while (next && overflows(list) && list.querySelectorAll('.chip').length > 1) {
         next.prepend(list.lastElementChild);
-        piece.classList.remove('snug', 'tight');
+        clearFit(piece);
         fitPiece(piece);
       }
     });
@@ -244,7 +250,7 @@ const CalendarWeek = (() => {
   function fitBlocks() {
     const byPlace = new Map();
     document.querySelectorAll('#body .block').forEach(piece => {
-      piece.classList.remove('tight', 'snug');
+      clearFit(piece);
       if (!byPlace.has(piece.dataset.place)) byPlace.set(piece.dataset.place, []);
       byPlace.get(piece.dataset.place).push(piece);
     });

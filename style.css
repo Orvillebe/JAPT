@@ -494,6 +494,7 @@ dialog.gvw.editing{overflow:visible}
 .chip .cside{display:flex;align-items:center;gap:6px;flex:none;margin-left:auto}
 .chip .t{flex:1 1 50%;min-width:0;overflow-wrap:break-word;font-weight:600;line-height:1.3}
 /* past het niet in het blok: één regel per taak, klik voor alle info */
+.block.lean .chip .mrow.client{display:none}
 .block.snug .chip{padding:4px 8px;gap:0}
 .block.snug .chip .meta{display:none}
 .block.snug .chip .ct{align-items:center}

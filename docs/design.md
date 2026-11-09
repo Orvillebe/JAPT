@@ -10,6 +10,7 @@ How JAPT works and why: users and hosting, the data model, the rules, and how th
 - **Meetings** are read, read-only, from the shared kSuite (Infomaniak) agenda through its shareable link. The link is a setting in Beheer, never in the code. One team agenda for now; the model leaves room for one agenda per person (see *Possible future*).
 - **Offline adding to the Inbox:** prepared now (see *Inbox*), built later (see *Possible future*).
 - **Users** are the same as JATL and JAFT: own Supabase project, invited users, access list. Beheer only sets name and colour.
+- **Teams are in the database from the first migration** (decided 2026-11-09). JAPT starts with one team, Orville, and nothing changes in what you see. If it is opened up later, it grows in many small teams; the data is ready for that. See *Teams*.
 - **Deleting** goes to a Bin for 30 days, as in JAFT, instead of the mockup's "Definitief verwijderen".
 - **Look:** three themes as in JAFT (Orville licht default, Orville donker, Neutraal), chosen per device.
 - **Name:** JAPT, Just A Planning Tool. The interface title is *JAPT*, not the mockup's *Weekplanner*.
@@ -25,15 +26,15 @@ How JAPT works and why: users and hosting, the data model, the rules, and how th
 
 **Assumption:** as in JAFT.
 
-- **Users:** a small agency team. Everyone sees and changes everything. No roles.
-- **Database:** its own Supabase project, EU region, free plan. Row Level Security on every table, self-registration off, users are invited, and every rule checks "logged in and on the access list" (`members.allowed`).
+- **Users:** a small agency team. Everyone in a team sees and changes everything of that team. No roles.
+- **Database:** its own Supabase project, EU region, free plan. Row Level Security on every table, self-registration off, users are invited, and every rule checks "logged in and on the access list of the team this row belongs to" (`members.allowed`, see *Teams*).
 - **Swappable data layer:** the app talks to one data layer (`data-service.js`). Local storage for testing, Supabase in production. Which one follows from the address (`productionHosts` in `config.js`), so testing never reaches the real database.
 - **Hosting:** static files, no build step, GitHub Pages. Branch `dev` for work, `main` is live.
 - **Personal view settings stay on the device:** current view (Taken, Doelen, Inbox), calendar mode, grouping, filters, folded lists, hidden sidebar. They are not shared and not in the database.
 
 ## 2. Backups
 
-**Assumption:** as in JAFT. A backup export in Beheer (everything as one JSON file, date of last export shown) and `tools/restore.html` to turn a backup into SQL. The free Supabase plan has no restorable backups.
+**Assumption:** as in JAFT. A backup export in Beheer (everything of your team as one JSON file, date of last export shown) and `tools/restore.html` to turn a backup into SQL. The free Supabase plan has no restorable backups.
 
 ## 3. Language
 
@@ -106,11 +107,12 @@ classDiagram
 
 ### Database tables (proposal)
 
-Every table also has `created_by`, `created_at`, `changed_by` and `changed_at`; tasks, goals and clients also have `deleted_at` for the Bin.
+Every table except `teams` and `schema_migrations` has `team_id`. Every table also has `created_by`, `created_at`, `changed_by` and `changed_at`; tasks, goals and clients also have `deleted_at` for the Bin.
 
 | Table | Holds |
 |---|---|
-| `members` | The users: name, colour, `allowed`. |
+| `teams` | The teams: name. One row to start with: Orville. |
+| `members` | A person in a team: `user_id` (the login), name, colour, `allowed`. Someone in two teams has two rows, so a name and colour per team. `members.id` is not the login id. |
 | `clients` | Clients, by name. A goal without client is *Intern*. |
 | `goals` | Name, note, colour (`hue`), client or none, `achieved_on`. |
 | `tasks` | Title, note, goal (empty only while in the Inbox), `stage` (`inbox`, `open`, `backlog`), `done_on`, deadline, repeat (`3:m`), `next_task_id` for the repeat it made, `position` for the manual order. |
@@ -120,7 +122,7 @@ Every table also has `created_by`, `created_at`, `changed_by` and `changed_at`; 
 | `period_segments` | The work period setting: from, length, unit. A change is a new segment from a future date. |
 | `period_placements` | A task in a work period, without day or hour (`period_start`, `task_id`, `position`). The mockup's `S.plan['cy@2026-11-02']`. |
 | `calendars` | The agendas meetings come from: name, link (`url`) and `owner` (empty = the team). Set in Beheer. Readable only by members on the access list. One row for now. |
-| `app_settings` | Shared settings: first day of the week, deadline reminder days, work period on or off. |
+| `app_settings` | Settings shared within a team: first day of the week, deadline reminder days, work period on or off. One row per team and setting (key `team_id` + `id`). |
 | `schema_migrations` | Which migrations have run. |
 
 ## 5. Rules
@@ -232,6 +234,25 @@ The options that were considered:
 - Deleting a user takes them off every task, after a confirmation with the count.
   With logins, adding a user happens in Supabase (invite); Beheer sets name and colour. Removing a user is taking them off the access list, done by the owner in the database. **Assumption:** their name stays on old tasks; *Verwijder* in Beheer only takes them off open tasks.
 
+### Teams
+
+Decided on 2026-11-09: one shared database and one version of the software for every team, with a team on every row. A separate database per team would mean running every migration once per team.
+
+**What the first migration does:**
+
+- `teams`, and `team_id` on every table that holds team data. One team to start with, Orville.
+- **Row Level Security keeps teams apart:** on every table, for reading, adding, changing and deleting, the row's team must be one you are an allowed member of. It also checks the new value, so a row can't be written into another team, and `team_id` can't be changed afterwards.
+- **No reference across teams:** a task can only point to a goal of its own team, and the same for every other reference (foreign keys on team and id together).
+- **Unique within a team:** client and user names, and settings.
+- **One narrow function may look past the rules:** `my_team_ids()` returns the teams of the person asking. It is needed because the rule on `members` can't read `members` itself. Everything else, including the function that saves a batch, runs with the rights of the user.
+- An index on `team_id` for every table.
+
+**In the code:** only the Supabase data layer knows about teams. It loads one team, adds `team_id` when it saves, and takes it off what it returns. `model.js`, the Store and the screens stay as they are, and the local version is one team without saying so. The team that is open is the first one you are a member of; choosing another is for when someone can be in two.
+
+**Proven by a test:** two test users in two teams. On every table and function, one tries to read, add, change and delete the other's data, and one attempt that works fails the test. A second check fails when a table has no Row Level Security. Both must first be seen to fail on a rule that was removed on purpose. They run against a real Supabase database, because the local version has no such rules.
+
+**Not built now** (see *Possible future*): signing up, creating a team, inviting from the app, choosing between teams, paying.
+
 ### Filters
 
 - Search, Wie, Doel and Klant. OR within one filter, AND between filters. The sidebar and the list view share them.
@@ -274,3 +295,5 @@ Not built, but prepared for. Each can be added without changing the data that ex
   - *Only adding.* Editing or planning offline would need rules for conflicts with colleagues first, a much bigger step.
 - **Live updates** (Supabase Realtime): changes of colleagues within a second instead of at the next move. What it takes is described under *Working at the same time*; the position numbers and the `changed_at` check are already in place.
 - **A second interface language:** all text is already in `i18n/nl.js` by key; it takes a second file and a choice in Beheer.
+- **More users: many small teams, not bigger teams.** If JAPT is ever opened up, it grows in the number of teams, each with one or a few people: an agency or a freelancer, and many of those. The use case is not the multinational, so no departments, no levels of organisation and no thousands of people in one planning. A freelancer is a team of one, not a special case.
+  The data is prepared for it (see *Teams*): every row has a team, and teams are kept apart. What it still takes: signing up and creating a team, inviting from the app, choosing between teams for someone in two, paying, a paid database plan, loading only recent data instead of everything, the Bin emptied by the database instead of by each browser, migrations that keep working while old tabs are open, and hosting other than GitHub Pages, which isn't meant for running a business.

@@ -25,6 +25,9 @@ const NL = {
   'manage.button': 'Beheer',
   'side.hide': 'Takenlijst verbergen',
   'side.hide_short': 'Verbergen',
+  'form.gone_task': 'Deze taak werd intussen verwijderd (zie Prullenbak). Wat je typte blijft hier staan om te kopiëren.',
+  'form.gone_goal': 'Dit doel werd intussen verwijderd (zie Prullenbak). Wat je typte blijft hier staan om te kopiëren.',
+  'form.gone_client': 'Deze klant werd intussen verwijderd.',
   'form.changed_meanwhile': 'Iemand anders wijzigde dit intussen. Bewaar opnieuw om jouw versie te houden, of annuleer.',
   'side.show': 'Takenlijst tonen',
 

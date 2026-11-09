@@ -235,6 +235,8 @@ const Store = (() => {
   };
   const refuse = problems => { if (problems) throw new RuleError(problems); };
   const blank = v => !String(v == null ? '' : v).trim();
+  // Deleted by someone else while a form was open: a clear refusal instead of a crash on a missing row.
+  const refuseIfGone = (row, field, key) => { if (!row) refuse({ [field]: key }); };
   const sameName = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
   // Outside the Inbox every task has a goal (docs/design.md, Which list a task is in).
@@ -333,6 +335,7 @@ const Store = (() => {
   }
   async function updateTask(id, { title, note, goalId, who, deadline, repeat }, seenAt) {
     const k = task(id);
+    refuseIfGone(k, 'title', 'form.gone_task');
     refuse(taskProblems({ title, goalId }, k.stage));
     const fields = { title, note, goalId, deadline, repeat: deadline ? repeat : null };
     const ops = [upd('tasks', id, fields, seenAt), ...whoOps(id, who)];
@@ -425,6 +428,7 @@ const Store = (() => {
   // Deleting goes to the Bin; one group id keeps things that went together, together.
   const binOp = (table, id, group, at) => ({ ...upd(table, id, { deletedAt: at, deleteGroup: group }) });
   async function binTask(id) {
+    refuseIfGone(task(id), 'title', 'form.gone_task');
     const group = newId(), at = nowIso();
     return run({ ops: [...outOfAllPlans(id), binOp('tasks', id, group, at)] });
   }
@@ -470,6 +474,7 @@ const Store = (() => {
     return run({ ops: [...c.ops, ins('goals', { name, note, clientId: c.clientId, hue, achievedOn: null })] });
   }
   async function updateGoal(id, { name, note, clientName, hue }, seenAt) {
+    refuseIfGone(goal(id), 'name', 'form.gone_goal');
     refuse(goalProblems({ name }));
     const c = clientOps(clientName), g = goal(id);
     const ops = [...c.ops, upd('goals', id, { name, note, clientId: c.clientId, hue }, seenAt)];
@@ -492,6 +497,7 @@ const Store = (() => {
   // Deleting a goal: its tasks go to the Bin with it ('del') or back to the Inbox ('free').
   // A client that loses its last goal goes to the Bin in the same group.
   async function deleteGoal(id, how) {
+    refuseIfGone(goal(id), 'name', 'form.gone_goal');
     const g = goal(id), group = newId(), at = nowIso(), ops = [];
     tasks().filter(k => k.goalId === id).forEach(k => {
       if (how === 'del') ops.push(...outOfAllPlans(k.id), binOp('tasks', k.id, group, at));
@@ -503,6 +509,7 @@ const Store = (() => {
     return run({ ops });
   }
   async function renameClient(id, name, seenAt) {
+    refuseIfGone(client(id), 'name', 'form.gone_client');
     refuse(clientProblems(id, name));
     return run({ ops: [upd('clients', id, { name: name.trim() }, seenAt)] });
   }

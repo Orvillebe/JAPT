@@ -134,6 +134,25 @@ test('the goal form and renaming a client save against the version they opened',
   eq((await stored('clients'))[0].name, 'Hernoemd');
 });
 
+test('saving a form of something deleted meanwhile says so, and changes nothing', async () => {
+  const w = await app({ tasks: [task('a')] });
+  const { S, DS } = w, form = { title: 'x', note: '', goalId: 'g1', who: [], deadline: null, repeat: null };
+  const seenTask = S.task('a').changedAt, seenGoal = S.goal('g1').changedAt, seenClient = S.client('c1').changedAt;
+  const at = new Date().toISOString(), binned = { deletedAt: at, deleteGroup: 'g' };
+  await tick();
+  await DS.batch([
+    { op: 'update', table: 'tasks', id: 'a', fields: binned },
+    { op: 'update', table: 'goals', id: 'g1', fields: binned },
+    { op: 'update', table: 'clients', id: 'c1', fields: binned }
+  ]);
+  await S.reload();
+  await refused(w, () => S.updateTask('a', form, seenTask), ['title']);
+  await refused(w, () => S.updateGoal('g1', { name: 'x', note: '', clientName: '', hue: 8 }, seenGoal), ['name']);
+  await refused(w, () => S.renameClient('c1', 'x', seenClient), ['name']);
+  await refused(w, () => S.binTask('a'), ['title']);
+  await refused(w, () => S.deleteGoal('g1', 'del'), ['name']);
+});
+
 /* ---------- undo ---------- */
 
 test('undo takes a new task and its people away', async () => {

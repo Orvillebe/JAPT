@@ -678,7 +678,18 @@ input,textarea,select{color:var(--text)}
 .local-note{background:var(--warn-bg);color:var(--warn-ink);font-size:13px;text-align:center;padding:5px 16px}
 .err{color:var(--danger)}
 #toast button{margin-left:12px;background:none;border:0;color:inherit;font-weight:700;text-decoration:underline;padding:0}
-.mtabbar{flex-wrap:wrap;margin-bottom:14px}
+/* Beheer: de tabbladen als menu links, zodat negen woorden niet over twee rijen breken */
+dialog.manage{width:min(960px,94vw)}
+dialog.manage [data-mbody]{display:grid;grid-template-columns:150px minmax(0,1fr);gap:24px;align-items:start}
+.mnav{display:flex;flex-direction:column;gap:2px;position:sticky;top:0}
+.mnav button{border:0;border-radius:8px;background:transparent;padding:7px 10px;font-size:14px;text-align:left;white-space:nowrap}
+.mnav button:hover{background:var(--hover-bg)}
+.mnav button.active{background:var(--accent);color:var(--on-accent);font-weight:600}
+@media (max-width:700px){   /* gsm: één rij die zijwaarts schuift */
+  dialog.manage [data-mbody]{grid-template-columns:minmax(0,1fr);gap:12px}
+  .mnav{flex-direction:row;overflow-x:auto;position:static;padding-bottom:4px}
+  .mnav button{flex:none}
+}
 .binrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);margin-bottom:6px}
 .binrow small{display:block;color:var(--muted);font-size:12.5px}
 .madd input[type=url]{flex:1;min-width:0;font:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}

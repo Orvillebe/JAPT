@@ -51,11 +51,19 @@ const Manage = (() => {
   const tabButton = k => html`
     <button type="button" data-mtab="${k}" class="${tab === k ? 'active' : ''}">${t('manage.tab.' + k)}</button>`;
 
+  // On a phone the tabs are one row that scrolls sideways; drawing it again would jump back to the start.
+  function keepActiveTabInView() {
+    const nav = body().querySelector('.mnav'), active = nav.querySelector('.active');
+    if (active) nav.scrollLeft = active.offsetLeft - nav.offsetLeft;
+  }
+
   function render() {
     if (!win) return;
     const fsel = focusSelector(document.activeElement);
-    body().innerHTML = `<div class="seg mtabs mtabbar">${TABS.map(tabButton).join('')}</div>`
-      + `<div data-merr>${errorBox(err)}</div>` + VIEWS[tab]();
+    body().innerHTML = html`
+      <nav class="mnav">${TABS.map(tabButton).join('')}</nav>
+      <div class="mcontent"><div data-merr>${errorBox(err)}</div>${VIEWS[tab]()}</div>`;
+    keepActiveTabInView();
     const back = fsel && body().querySelector(fsel);
     if (back) back.focus();
     const dayPanel = body().querySelector('.dayconf');
@@ -120,7 +128,7 @@ const Manage = (() => {
   function open() {
     confirmDel = null; err = ''; ManageBlocks.reset(); ManageOther.reset();
     const onClose = () => { win = null; ManageBlocks.cancelDrag(); };
-    win = UI.dialog({ cls: 'wide', closeOutside: () => true, onClose });
+    win = UI.dialog({ cls: 'wide manage', closeOutside: () => true, onClose });
     const closeLabel = t('form.close');
     win.innerHTML = html`
       <div class="mhead">

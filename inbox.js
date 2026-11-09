@@ -116,7 +116,7 @@ const Inbox = (() => {
     </div>`;
   const clientBlock = c => html`
     <div class="ibclient">
-      <div class="cghead"><span class="cn">${esc(c.name)}</span></div>
+      <div class="cghead"><span class="cn" title="${esc(c.name)}">${esc(c.name)}</span></div>
       <div class="ibgoals2">${c.goals.map(goalCard).join('')}</div>
     </div>`;
 

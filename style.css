@@ -656,6 +656,7 @@ dialog.gvw.editing{overflow:visible}
 .ibgoals2 .gcard{gap:6px;padding:8px 10px}
 .ibitem .task{cursor:pointer}
 .ibclient{min-width:0}
+.ibclient .cn{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* een lange naam op één regel, zodat de doelen naast elkaar gelijk starten */
 .ibgoals2{display:flex;flex-direction:column;gap:8px}
 .ibgoals2 .gcard{cursor:default}
 .ibbks{display:grid;grid-template-columns:1fr 1fr;gap:8px}

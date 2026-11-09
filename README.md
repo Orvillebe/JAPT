@@ -12,7 +12,7 @@ What the user sees and does is in the interaction mockup [`docs/JAPT_userinterac
 2. Open `http://localhost:8766/tests/load-testdata.html` and click **Testdata laden**. The test data is built around today, so it never goes stale.
 3. Open `http://localhost:8766/`.
 
-Everything stays in this browser (localStorage). The real database is only used on the live address (`productionHosts` in `config.js`).
+Everything stays in this browser (localStorage). The real database is only used on the live address (`productionHosts` in `deployment.js`).
 
 ## Tests
 

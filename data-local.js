@@ -10,7 +10,7 @@
  *   - Upgrading stored data to the current version, the local mirror of migrations/ (LOCAL_MIGRATIONS)
  *   - Importing a backup file, for testing a new version on a copy of real data
  *
- * Used everywhere except on the live address (productionHosts in config.js), so local testing never
+ * Used everywhere except on the live address (productionHosts in deployment.js), so local testing never
  * touches the real database. There is no login: everything is saved as one local member.
  * tests/load-testdata.html fills this storage with a test data set.
  */

@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=0.3.10">
+<link rel="stylesheet" href="style.css?v=0.4.0">
 <!-- The look is chosen per device in Beheer; set it before the page draws, so it never flashes. -->
 <script>try { var th = localStorage.getItem('japt_theme'); if (th === 'orville' || th === 'neutral') document.documentElement.dataset.theme = th; } catch (e) {}</script>
 </head>
@@ -18,7 +18,14 @@
 <div class="local-note" id="localNote" hidden data-i18n="app.local_note"></div>
 <div class="loading" id="loading" data-i18n="app.loading"></div>
 <div class="screen" id="versionScreen" hidden><p id="versionText"></p><button type="button" id="versionReload" data-i18n="version.reload"></button></div>
-<div class="screen" id="accessScreen" hidden><p data-i18n="access.none"></p></div>
+<div class="screen" id="accessScreen" hidden><p data-i18n="access.none"></p><button type="button" id="accessLogout" data-i18n="login.logout"></button></div>
+<form class="screen login" id="loginScreen" hidden>
+  <h1 data-i18n="app.title"></h1>
+  <label class="f"><span class="fl" data-i18n="login.email"></span><input type="email" id="loginEmail" autocomplete="email"></label>
+  <label class="f"><span class="fl" data-i18n="login.password"></span><input type="password" id="loginPassword" autocomplete="current-password"></label>
+  <button type="submit" class="primary" id="loginBtn" data-i18n="login.button"></button>
+  <p class="login-error" id="loginError" role="alert"></p>
+</form>
 
 <div id="main" hidden>
 <header>
@@ -28,7 +35,7 @@
     <button type="button" data-view="goals" data-i18n="view.goals"></button>
     <button type="button" data-view="inbox"><span data-i18n="view.inbox"></span><span class="nbadge" id="ibBadge"></span></button>
   </div>
-  <div class="hr"><button type="button" id="btnManage" data-i18n="manage.button"></button></div>
+  <div class="hr"><button type="button" id="btnManage" data-i18n="manage.button"></button><button type="button" id="btnLogout" hidden data-i18n="login.logout"></button></div>
 </header>
 
 <div class="app">
@@ -142,40 +149,43 @@
 <div id="toast" role="status" hidden></div>
 
 <!-- Pinned version: repeating meetings in the agenda (agenda.js). The 1.x build works without a bundler. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js" integrity="sha384-UagCvVPT5XXA0Hx+nJYUAGBFseHT9zBgpJMSebsAxl9lciTwbT+39j5VfRjdP5Tp" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js" integrity="sha384-6SU9o/kopjziIukGhxSpfo75dojAj0O1JWZ+Z/2FdC6rLs6pJvDmRntnUdMS7ht2" crossorigin="anonymous"></script>
 <!-- Every local file carries the app version (?v=), so after a release the browser fetches the new files
      instead of mixing cached old ones with new ones. tests/release.test.js checks that they match. -->
-<script src="version.js?v=0.3.10"></script>
-<script src="config.js?v=0.3.10"></script>
-<script src="i18n/nl.js?v=0.3.10"></script>
-<script src="i18n/i18n.js?v=0.3.10"></script>
-<script src="model.js?v=0.3.10"></script>
-<script src="id.js?v=0.3.10"></script>
-<script src="tables.js?v=0.3.10"></script>
-<script src="data-local.js?v=0.3.10"></script>
-<script src="data-service.js?v=0.3.10"></script>
-<script src="store.js?v=0.3.10"></script>
-<script src="ui.js?v=0.3.10"></script>
-<script src="figures.js?v=0.3.10"></script>
-<script src="filter-picker.js?v=0.3.10"></script>
-<script src="goal-picker.js?v=0.3.10"></script>
-<script src="deadline-picker.js?v=0.3.10"></script>
-<script src="drag.js?v=0.3.10"></script>
-<script src="agenda.js?v=0.3.10"></script>
-<script src="calendar-views.js?v=0.3.10"></script>
-<script src="calendar-week.js?v=0.3.10"></script>
-<script src="calendar-period.js?v=0.3.10"></script>
-<script src="calendar-list.js?v=0.3.10"></script>
-<script src="calendar-card.js?v=0.3.10"></script>
-<script src="calendar.js?v=0.3.10"></script>
-<script src="tasks.js?v=0.3.10"></script>
-<script src="goals.js?v=0.3.10"></script>
-<script src="inbox.js?v=0.3.10"></script>
-<script src="manage-blocks.js?v=0.3.10"></script>
-<script src="manage-period.js?v=0.3.10"></script>
-<script src="manage-other.js?v=0.3.10"></script>
-<script src="manage.js?v=0.3.10"></script>
-<script src="export.js?v=0.3.10"></script>
-<script src="app.js?v=0.3.10"></script>
+<script src="version.js?v=0.4.0"></script>
+<script src="deployment.js?v=0.4.0"></script>
+<script src="config.js?v=0.4.0"></script>
+<script src="i18n/nl.js?v=0.4.0"></script>
+<script src="i18n/i18n.js?v=0.4.0"></script>
+<script src="model.js?v=0.4.0"></script>
+<script src="id.js?v=0.4.0"></script>
+<script src="tables.js?v=0.4.0"></script>
+<script src="data-local.js?v=0.4.0"></script>
+<script src="data-supabase.js?v=0.4.0"></script>
+<script src="data-service.js?v=0.4.0"></script>
+<script src="store.js?v=0.4.0"></script>
+<script src="ui.js?v=0.4.0"></script>
+<script src="figures.js?v=0.4.0"></script>
+<script src="filter-picker.js?v=0.4.0"></script>
+<script src="goal-picker.js?v=0.4.0"></script>
+<script src="deadline-picker.js?v=0.4.0"></script>
+<script src="drag.js?v=0.4.0"></script>
+<script src="agenda.js?v=0.4.0"></script>
+<script src="calendar-views.js?v=0.4.0"></script>
+<script src="calendar-week.js?v=0.4.0"></script>
+<script src="calendar-period.js?v=0.4.0"></script>
+<script src="calendar-list.js?v=0.4.0"></script>
+<script src="calendar-card.js?v=0.4.0"></script>
+<script src="calendar.js?v=0.4.0"></script>
+<script src="tasks.js?v=0.4.0"></script>
+<script src="goals.js?v=0.4.0"></script>
+<script src="inbox.js?v=0.4.0"></script>
+<script src="manage-blocks.js?v=0.4.0"></script>
+<script src="manage-period.js?v=0.4.0"></script>
+<script src="manage-other.js?v=0.4.0"></script>
+<script src="manage.js?v=0.4.0"></script>
+<script src="export.js?v=0.4.0"></script>
+<script src="app.js?v=0.4.0"></script>
 </body>
 </html>

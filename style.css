@@ -675,6 +675,13 @@ button{color:var(--text)}
 input,textarea,select{color:var(--text)}
 .loading{text-align:center;color:var(--muted);padding:80px 16px}
 .screen{max-width:520px;margin:80px auto;padding:0 16px;text-align:center}
+.login{max-width:360px;text-align:left}
+.login h1{text-align:center;margin:0 0 24px;font-size:26px}
+.login .f{display:block;margin-bottom:12px}
+.login input{width:100%;box-sizing:border-box;padding:8px 10px;font-size:15px;border-radius:8px}
+@media (max-width:700px){ .login input{font-size:16px} }   /* onder 16px zoomt een gsm in op het veld */
+.login button{width:100%;padding:8px 10px;font-size:15px}
+.login-error{color:var(--warn-ink);min-height:1.4em;margin:12px 0 0;font-size:14px}
 .local-note{background:var(--warn-bg);color:var(--warn-ink);font-size:13px;text-align:center;padding:5px 16px}
 .err{color:var(--danger)}
 #toast button{margin-left:12px;background:none;border:0;color:inherit;font-weight:700;text-decoration:underline;padding:0}

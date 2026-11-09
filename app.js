@@ -11,8 +11,10 @@
  *   model.js             - pure rules: dates, blocks, periods, lists, deadlines, repeats, order, filters
  *   id.js                - new ids, made in the app
  *   tables.js            - the names of the database tables
+ *   deployment.js        - what makes this installation this one: addresses, backend, Supabase project
  *   data-local.js        - storage in this browser (testing)
- *   data-service.js      - picks the data layer (Supabase on the live address: next build step)
+ *   data-supabase.js     - storage in Supabase
+ *   data-service.js      - picks the data layer, and the contract every data layer offers
  *   store.js             - data in memory, every action as one save with its undo
  *   ui.js                - shared pieces: view memory, cards, windows, Escape, toast
  *   figures.js           - the small figures that sometimes walk by when a task is checked off
@@ -109,6 +111,33 @@ const App = (() => {
     return false;
   }
 
+  function showLogin() {
+    $('loading').hidden = true;
+    $('loginScreen').hidden = false;
+    $('loginEmail').focus();
+  }
+  async function login(e) {
+    e.preventDefault();
+    const email = $('loginEmail').value.trim(), password = $('loginPassword').value;
+    if (!email || !password) { $('loginError').textContent = t('login.fill_in'); return; }
+    $('loginBtn').disabled = true;
+    $('loginError').textContent = '';
+    try {
+      await DataService.signIn(email, password);
+      $('loginScreen').hidden = true;
+      await start();
+    } catch (err) {
+      console.error(err);
+      $('loginError').textContent = t('login.failed');
+    } finally {
+      $('loginBtn').disabled = false;
+    }
+  }
+  async function logout() {
+    try { await DataService.signOut(); } catch (e) { console.error(e); }
+    location.reload();
+  }
+
   async function start() {
     $('loading').hidden = false;
     try {
@@ -157,10 +186,15 @@ const App = (() => {
     document.title = t('app.title');
     $('localNote').hidden = DataService.needsLogin;
     $('versionReload').onclick = () => location.reload();
+    $('loginScreen').onsubmit = login;
+    $('btnLogout').hidden = !DataService.needsLogin;
+    $('btnLogout').onclick = logout;
+    $('accessLogout').onclick = logout;
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') reloadIfStale(true);
     });
-    await start();
+    if (await DataService.getSession()) await start();
+    else showLogin();
   }
 
   const versions = () => ({ app: APP_VERSION, db: dbVersion });

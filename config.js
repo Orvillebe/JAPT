@@ -8,11 +8,6 @@
 
 const JAPT_CONFIG = (() => {
   const DEFAULTS = {
-    // The addresses where the live app runs. Only there does the app use the real database
-    // (Supabase). Everywhere else (localhost, the local network, a file) it uses local test data
-    // in the browser, so testing can never touch the real database by accident.
-    productionHosts: [],
-
     // First day of the week until it is changed in Beheer. 0 = Sunday, 1 = Monday ... 6 = Saturday
     // (the numbering of Date.getDay). Monday, as in the mockup.
     weekStart: 1,
@@ -41,11 +36,10 @@ const JAPT_CONFIG = (() => {
   };
 
   // Change values here. Leave a key out to use the default.
-  const SETTINGS = { productionHosts: ['orvillebe.github.io'] };
+  const SETTINGS = {};
 
   const int = (lo, hi) => v => Number.isInteger(v) && v >= lo && v <= hi;
   const CHECKS = {
-    productionHosts: v => Array.isArray(v) && v.every(h => typeof h === 'string'),
     weekStart: int(0, 6),
     deadlineDays: int(0, 90),
     binDays: int(1, 365),
@@ -61,9 +55,18 @@ const JAPT_CONFIG = (() => {
     if (CHECKS[k] && CHECKS[k](v)) cfg[k] = v;
     else console.warn(`JAPT config: invalid value for ${k}, default used`, v);
   }
-  // The data layer follows from where the app runs, never from a setting someone might forget.
-  const host = typeof location !== 'undefined' ? location.hostname : '';
-  cfg.backend = cfg.productionHosts.includes(host) ? 'supabase' : 'local';
+  // The data layer follows from where the app runs, never from a setting someone might forget
+  // (deployment.js explains the three cases).
+  const deployment = typeof JAPT_DEPLOYMENT !== 'undefined'
+    ? JAPT_DEPLOYMENT
+    : { productionHosts: [], backend: 'local' };
+  const here = typeof location !== 'undefined' ? location : { hostname: '', search: '' };
+  const OWN_MACHINE = [/^$/, /^localhost$/, /^127\./, /^\[::1\]$/, /\.local$/, /^192\.168\./, /^10\./, /^172\.(1[6-9]|2\d|3[01])\./];
+  const isOwnMachine = OWN_MACHINE.some(re => re.test(here.hostname));
+  const wantsLive = /[?&]db=live(&|$)/.test(here.search);
+  if (deployment.productionHosts.includes(here.hostname)) cfg.backend = deployment.backend;
+  else if (isOwnMachine) cfg.backend = wantsLive ? deployment.backend : 'local';
+  else cfg.backend = 'unknown address';
   return Object.freeze(cfg);
 })();
 

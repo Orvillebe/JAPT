@@ -28,7 +28,7 @@ How JAPT works and why: users and hosting, the data model, the rules, and how th
 
 - **Users:** a small agency team. Everyone in a team sees and changes everything of that team. No roles.
 - **Database:** its own Supabase project, EU region, free plan. Row Level Security on every table, self-registration off, users are invited, and every rule checks "logged in and on the access list of the team this row belongs to" (`members.allowed`, see *Teams*).
-- **Swappable data layer:** the app talks to one data layer (`data-service.js`). Local storage for testing, Supabase in production. Which one follows from the address (`productionHosts` in `config.js`), so testing never reaches the real database.
+- **Swappable data layer:** the app talks to one data layer (`data-service.js`). Local storage for testing, Supabase in production. Which one follows from the address (`productionHosts` in `deployment.js`), so testing never reaches the real database.
 - **Hosting:** static files, no build step, GitHub Pages. Branch `dev` for work, `main` is live.
 - **Personal view settings stay on the device:** current view (Taken, Doelen, Inbox), calendar mode, grouping, filters, folded lists, hidden sidebar. They are not shared and not in the database.
 

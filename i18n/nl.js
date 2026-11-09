@@ -24,6 +24,7 @@ const NL = {
   'version.line': 'App {app} · database {db}',
   'error.load': 'Laden lukte niet: {reason}',
   'error.save': 'Bewaren lukte niet. Probeer opnieuw.',
+  'error.no_answer': 'Geen antwoord van de server. Kijk na of je wijziging bewaard is.',
   'error.conflict': 'Iemand anders wijzigde dit intussen. De nieuwste versie is geladen.',
 
   'view.tasks': 'Taken',

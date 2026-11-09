@@ -100,12 +100,16 @@ node tests/contract.test.js
 ```
 
 ```bash
+node tests/supabase-layer.test.js
+```
+
+```bash
 node tests/teams.test.js
 ```
 
 The first tests the rules (dates, blocks, work periods, lists, deadlines, repeats, order, filters). The second tests saving on the local data layer: all or nothing, undo, the check on changes by someone else, and the rules that need more than one row. The third checks that every file in `index.html` carries the app version, that no line of code is over 140 characters, and that the escape test has a step for every calendar view and Beheer tab.
 
-The fourth checks that a backup becomes a correct restore script. The fifth checks that the local data layer does what every data layer must do; `tests/contract.html?db=live` checks the same on the layer in `deployment.js`, from a browser where you are logged in. The sixth runs against the real database and proves that one team can't reach another team's data: on every table and on the save function, a login of team A tries to read, add, change and delete what is team B's. It needs some setup first, see **Teams test** below.
+The fourth checks that a backup becomes a correct restore script. The fifth checks that the local data layer does what every data layer must do; `tests/contract.html?db=live` checks the same on the layer in `deployment.js`, from a browser where you are logged in. The sixth checks what the Supabase layer does with a request that hangs or gets no answer. The seventh runs against the real database and proves that one team can't reach another team's data: on every table and on the save function, a login of team A tries to read, add, change and delete what is team B's. It needs some setup first, see **Teams test** below.
 
 **Escape test, in the browser:** open `http://localhost:8766/tests/escape.html` and click **Test starten**. It fills every text people can type with a piece of HTML, opens every screen, window, picker and tab (wide and phone-sized), and fails when that text ever becomes real HTML in the page instead of text. That would let a task title run as code for everyone who sees it. Your local data is put aside and put back. Run it before every release; a new screen or window needs a new step in `STEPS`.
 

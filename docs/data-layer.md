@@ -59,4 +59,6 @@ Returns the stored rows in the same order, `null` for a removal.
 
 **`ifChangedAt`:** when the row's `changedAt` is no longer this value, someone else changed it. Refuse the whole batch by throwing an error with `code: 'conflict'`. The screens depend on that exact code. An `update` of a row that doesn't exist throws too, with any other error.
 
+**No answer:** when you can't know whether a save was stored (the connection fell away, the time ran out), throw an error with `code: 'no-answer'`. The screens then reload before anyone tries again. Give every request a time limit: saves wait their turn, so one that never answers holds up everything after it. `data-supabase.js` stops a request after `requestSeconds` in `config.js`.
+
 A batch can add a row and refer to it in any order.

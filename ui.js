@@ -291,9 +291,15 @@ const UI = (() => {
     return true;
   }
 
+  // Saves that end without knowing what is stored: first load what is really there, so that trying again
+  // doesn't save the same thing twice.
+  const SAY_AND_RELOAD = { conflict: 'error.conflict', 'no-answer': 'error.no_answer' };
+  let lastSaveHadNoAnswer = false;
+
   async function reportSaveError(e) {
-    if (e && e.code === 'conflict') {
-      toast(t('error.conflict'));
+    lastSaveHadNoAnswer = !!e && e.code === 'no-answer';
+    if (e && SAY_AND_RELOAD[e.code]) {
+      toast(t(SAY_AND_RELOAD[e.code]));
       try { await Store.reload(); } catch (reloadError) { console.error(reloadError); }
     } else if (e && e.code === 'rule') {
       toast(t(Object.values(e.problems)[0]));
@@ -310,15 +316,17 @@ const UI = (() => {
   }
 
   // After a form could not save: when someone else changed it meanwhile, say what now. Returns the version
-  // the form counts as seen, so saving again is a conscious choice for your own version.
+  // the form counts as seen, so saving again is a conscious choice for your own version. After no answer
+  // the new version may be your own save, so that message would be wrong.
   function afterFormConflict(seenAt, row, goneKey) {
     if (sayIfGone(row, goneKey) || row.changedAt === seenAt) return seenAt;
-    toast(t('form.changed_meanwhile'));
+    if (!lastSaveHadNoAnswer) toast(t('form.changed_meanwhile'));
     return row.changedAt;
   }
 
   // Every save goes through here. Returns what the action returned, or null when it was not saved:
   //   someone else changed the same thing meanwhile -> reload and say so
+  //   no answer, so it may or may not be stored      -> reload and say so
   //   the Store refused it (a rule)                  -> say why (screens normally ask first)
   //   anything else                                  -> "not saved"
   async function act(fn) {

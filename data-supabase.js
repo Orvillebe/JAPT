@@ -13,7 +13,17 @@
  */
 
 function createSupabaseData() {
-  const sb = window.supabase.createClient(JAPT_DEPLOYMENT.supabaseUrl, JAPT_DEPLOYMENT.supabaseKey);
+  // supabase-js has no time limit of its own. Stopping with abort() and not AbortSignal.timeout: the library
+  // tries a read again after a TimeoutError, which would make the wait four times as long. The timer keeps
+  // running after the first bytes, so an answer that stalls halfway is stopped too.
+  function fetchWithLimit(url, init) {
+    const limit = new AbortController();
+    setTimeout(() => limit.abort(), JAPT_CONFIG.requestSeconds * 1000);
+    return fetch(url, { ...init, signal: limit.signal });
+  }
+  const sb = window.supabase.createClient(JAPT_DEPLOYMENT.supabaseUrl, JAPT_DEPLOYMENT.supabaseKey, {
+    global: { fetch: fetchWithLimit }
+  });
   let teamId = null;   // set by hasAccess, which the app calls before anything is loaded
 
   /* ---------- columns and fields ---------- */
@@ -33,7 +43,13 @@ function createSupabaseData() {
     Object.entries(r).filter(([k, v]) => !META.has(k) && v !== undefined).map(([k, v]) => [toColumn(k), v])
   ) : undefined);
 
-  function check(error) { if (error) throw error; }
+  // The database gives a code with everything it refuses. Without one the request got no verdict: the
+  // connection fell away or the time ran out, and the change may or may not have been stored.
+  function check(error) {
+    if (!error) return;
+    if (!error.code) throw Object.assign(new Error(error.message), { code: 'no-answer' });
+    throw error;
+  }
 
   /* ---------- reading ---------- */
 

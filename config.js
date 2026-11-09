@@ -32,7 +32,11 @@ const JAPT_CONFIG = (() => {
 
     // The shortest time between two reloads of the team's changes (seconds), so moving through
     // weeks quickly doesn't reload on every click. docs/design.md, Working at the same time.
-    reloadSeconds: 20
+    reloadSeconds: 20,
+
+    // How long one request to the database may take (seconds). Saves wait their turn, so one that never
+    // answers would hold up every click after it. Long enough for a slow phone connection.
+    requestSeconds: 15
   };
 
   // Change values here. Leave a key out to use the default.
@@ -47,7 +51,8 @@ const JAPT_CONFIG = (() => {
     dayStart: int(0, 23),
     dayEnd: int(1, 24),
     agendaMinutes: int(1, 1440),
-    reloadSeconds: int(0, 3600)
+    reloadSeconds: int(0, 3600),
+    requestSeconds: int(1, 300)
   };
 
   const cfg = { ...DEFAULTS };

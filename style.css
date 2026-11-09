@@ -684,6 +684,7 @@ input,textarea,select{color:var(--text)}
 .block.short{padding:0 6px 1px;gap:0}   /* een halfuur: net plaats voor de uren en één taak */
 .block.short .bh{font-size:10.5px;line-height:13px}
 .block.short .chip{padding:2px 8px}
+.block.short.nohead{padding:6px}   /* zonder uren: de taak staat midden in het stuk */
 .covered{position:absolute;z-index:3;right:6px;bottom:6px;padding:1px 8px;border-radius:9px;background:var(--panel);border:1px solid var(--line);font-size:12px;color:var(--block-ink)}   /* boven de meeting: de taken blijven ingepland */
 
 /* Beheer: de tabbladen als menu links, zodat negen woorden niet over twee rijen breken */

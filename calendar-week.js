@@ -152,7 +152,7 @@ const CalendarWeek = (() => {
     const position = `top:${topPx(from, firstHour)}px;height:${(to - from) / 60 * PX_PER_HOUR}px`;
     const short = to - from < SHORT_MINUTES ? 'short' : '';
     return html`
-      <div class="block ${short} ${noRoom ? 'noroom' : ''}" ${noRoom ? 'data-noroom' : ''}
+      <div class="block ${short} ${head ? '' : 'nohead'} ${noRoom ? 'noroom' : ''}" ${noRoom ? 'data-noroom' : ''}
         ${part ? `data-part-from="${from}" data-part-to="${to}"` : ''} data-place="${P(place)}" style="${position}">
         ${head}
         ${content}

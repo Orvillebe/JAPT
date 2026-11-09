@@ -5,7 +5,7 @@
  *   - The four lists under each other (Nog niet ingepland, Ingepland, Gedaan, Backlog), folded by
  *     content unless you fold them yourself; search, filters and grouping by goal or client
  *   - Showing the task that is open in the calendar, and putting the sidebar back afterwards
- *   - The drop zone for these lists and the dock (drag.js): a closed list opens while you hover
+ *   - The drop zone for these lists (drag.js): a closed list opens while you hover
  *   - The task form: new, edit, delete (to the Bin, with Ongedaan); a window made when it opens, that
  *     stays open until the save succeeded
  *   - Checking off anywhere, with what follows (a repeat, back to the Inbox, a figure)
@@ -151,7 +151,7 @@ const Tasks = (() => {
     }
   }
 
-  /* ---------- dropping on the lists and the dock ---------- */
+  /* ---------- dropping on the lists ---------- */
 
   // Where in a list: on a card (upper or lower half), on the head (before the first), below (after the last).
   function spotIn(e, sec, drag) {
@@ -176,7 +176,7 @@ const Tasks = (() => {
   }
   const listZone = {
     // Ingepland is not a target: a task gets there by being planned
-    find: el => el.closest('#dock .dz') || el.closest(`#tasks .sec:not([data-list="${M.LIST.PLANNED}"])`),
+    find: el => el.closest(`#tasks .sec:not([data-list="${M.LIST.PLANNED}"])`),
     accepts: d => { const k = Store.task(d.task); return !!k && k.stage !== M.STAGE.INBOX; },
     over(e, tg, d) {
       const key = tg.dataset.list;
@@ -185,7 +185,7 @@ const Tasks = (() => {
     },
     leave: stopSpring,
     async drop(tg, d, spot) {
-      const list = tg.dataset.dropdock || tg.dataset.list;
+      const list = tg.dataset.list;
       const mark = spot && SORTABLE.includes(list) ? { id: spot.el.dataset.task, after: spot.after } : null;
       const res = await UI.act(() => Store.moveToList(d.task, list, mark));
       if (res) notes(res.notes, d.task);

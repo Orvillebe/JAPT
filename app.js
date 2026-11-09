@@ -64,7 +64,6 @@ const App = (() => {
     $('weekView').hidden = page !== 'tasks';
     $('goalsView').hidden = page !== 'goals';
     $('inboxView').hidden = page !== 'inbox';
-    document.body.classList.toggle('inbox-open', page === 'inbox');
     document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === page));
     syncSide();
     render();

@@ -79,15 +79,6 @@ input[type=checkbox].chk{flex:none;width:18px;height:18px;margin:1px 0 0;accent-
 .wd{flex:none;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;
   background:var(--pc);color:#fff;font-size:10px;font-weight:700;box-shadow:0 0 0 2px var(--panel)}
 
-/* sleepbalk: verschijnt zodra je een taak oppakt, zodat elke lijst altijd binnen bereik is */
-#dock{display:none;position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:50;gap:10px;align-items:center;
-  padding:10px 12px;background:rgba(40,40,36,.94);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.3)}
-body.dragging-any #dock{display:flex}
-body.inbox-open #dock{display:none !important}
-#dock .dz{padding:14px 18px;border:2px dashed rgba(255,255,255,.45);border-radius:10px;color:#fff;font-size:14px;font-weight:600;white-space:nowrap}
-#dock .dz.over{background:var(--accent);border-style:solid;border-color:var(--panel)}
-@media (max-width:700px){ #dock{left:8px;right:8px;transform:none;gap:6px;padding:8px;bottom:8px} #dock .dz{flex:1 1 0;min-width:0;padding:12px 4px;font-size:13px;white-space:normal;text-align:center} }
-
 /* doel en klant: gelabelde regels */
 .meta{display:flex;flex-direction:column;gap:3px;min-width:0}
 .mrow{display:flex;gap:8px;align-items:baseline;min-width:0;font-size:12.5px}

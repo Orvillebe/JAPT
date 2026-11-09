@@ -26,14 +26,17 @@ const CalendarCard = (() => {
   let card = null;
   const isOpen = () => card !== null;
   // restore: put the sidebar back as it was before the card opened.
+  const closedListeners = [];
+  const onClosed = f => { closedListeners.push(f); };
   function closePop(restore = false) {
-    const was = focusId !== null;
+    const was = focusId !== null, hadCard = card !== null;
     jumpHold = null;
     if (card) { card.remove(); card = null; }
     focusId = null;
     reapplyFocus();
     if (was && restore && savedSide) Tasks.restoreSide(savedSide);
     savedSide = null;
+    if (hadCard) closedListeners.forEach(f => f());
     return was;
   }
   function popAlsoOnHtml(others) {
@@ -155,5 +158,5 @@ const CalendarCard = (() => {
     if (focusId === id && !card) { focusId = null; reapplyFocus(); }
   }
 
-  return { isOpen, closePop, reapplyFocus, focusTask, jump, onJumpHoldMove };
+  return { isOpen, onClosed, closePop, reapplyFocus, focusTask, jump, onJumpHoldMove };
 })();

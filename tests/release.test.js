@@ -4,6 +4,7 @@
  *     files after a release instead of mixing cached old and new ones.
  *   - No line of code is longer than MAX_LINE, so nothing grows unreadable again. figures.js holds
  *     drawings as long lines of SVG and doesn't count.
+ *   - Scripts from outside carry an integrity hash, so a changed file on the CDN is refused.
  *   - The escape test (tests/escape.html, run in a browser) has a step for every calendar view and every
  *     Beheer tab, so a new one can't go untested.
  */
@@ -23,6 +24,9 @@ try {
   const wrong = local.filter(u => !u.endsWith('?v=' + APP_VERSION));
   assert.deepStrictEqual(wrong, [], `these don't carry ?v=${APP_VERSION}: ${wrong.join(', ')}`);
   for (const u of local) assert.ok(fs.existsSync(path.join(__dirname, '..', u.split('?')[0])), `${u} doesn't exist`);
+
+  const unpinned = [...html.matchAll(/<script\b[^>]*\bsrc="https?:[^>]*>/g)].map(m => m[0]).filter(s => !/\bintegrity="sha(256|384|512)-/.test(s));
+  assert.deepStrictEqual(unpinned, [], `scripts from outside without an integrity hash: ${unpinned.join(', ')}`);
 
   const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
   const code = local.map(u => u.split('?')[0]).filter(f => f.endsWith('.js') && f !== 'figures.js' && !f.startsWith('i18n/'));

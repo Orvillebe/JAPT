@@ -76,10 +76,17 @@ const App = (() => {
     if (View.page === 'inbox') Inbox.render();
     Inbox.badge();
   }
-  // Something that arrives by itself (the agenda) never redraws under a drag: it waits until you let go.
-  let afterDrag = false;
-  function renderWhenFree() { if (Drag.current()) afterDrag = true; else render(); }
-  Drag.onEnd(() => { if (afterDrag) { afterDrag = false; setTimeout(render, 0); } });
+  // Something that arrives by itself (the agenda, a reload) never redraws under a drag or an open task
+  // card, which would take them away from under your hand: it waits until they are done.
+  let renderWaiting = false, reloadWaiting = false;
+  const busy = () => Drag.current() || CalendarCard.isOpen();
+  function renderWhenFree() { if (busy()) renderWaiting = true; else render(); }
+  function catchUp() {
+    if (renderWaiting) { renderWaiting = false; setTimeout(render, 0); }
+    if (reloadWaiting) { reloadWaiting = false; reloadIfStale(true); }
+  }
+  Drag.onEnd(catchUp);
+  CalendarCard.onClosed(catchUp);
   // Saves change memory; draw once afterwards, not once per change.
   function queueRender() {
     if (renderQueued) return;
@@ -132,9 +139,11 @@ const App = (() => {
   }
 
   // Colleagues' changes are loaded when the app opens, when you come back to the tab, and when you move
-  // to another day, week or period (docs/design.md, Working at the same time). Never during a drag.
+  // to another day, week or period (docs/design.md, Working at the same time). Never during a drag or
+  // with a task card open: a reload that was due then happens right after.
   async function reloadIfStale(force) {
-    if (!started || Drag.current()) return;
+    if (!started) return;
+    if (busy()) { reloadWaiting = reloadWaiting || force; return; }
     if (!force && Date.now() - loadedAt < JAPT_CONFIG.reloadSeconds * 1000) return;
     loadedAt = Date.now();
     try { if (!await checkVersion()) return; await Store.reload(); }

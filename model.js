@@ -120,8 +120,8 @@ function createModel(CFG) {
   }
 
   // The parts of a block no meeting covers and that can hold a task, in time order. Tasks are only placed
-  // there: a meeting is time you aren't free. Shorter than half an hour has no room for one task.
-  const MIN_FREE_MINUTES = 30;
+  // there: a meeting is time you aren't free. Under 45 minutes a part has its times but no room for one task.
+  const MIN_FREE_MINUTES = 45;
   function freeParts(block, meetings, minLength = MIN_FREE_MINUTES) {
     let parts = [{ start: block.start, end: block.end }];
     for (const m of meetings) {

@@ -197,18 +197,6 @@ const CalendarWeek = (() => {
   // Blocks where the tasks don't fit get compact rows instead of a scrollbar.
   const overflows = list => list.scrollHeight > list.clientHeight + ROUNDING_TOLERANCE_PX;
 
-  // Tasks fill the pieces of a block from the top; what doesn't fit moves on to the next piece, in order.
-  function spreadOverPieces(pieces) {
-    const lists = pieces.map(piece => piece.querySelector('.list'));
-    pieces.flatMap(piece => [...piece.querySelectorAll('.chip')]).forEach(chip => lists[0].appendChild(chip));
-    lists.slice(0, -1).forEach((list, i) => {
-      while (overflows(list) && list.querySelector('.chip')) {
-        const next = lists[i + 1], empty = next.querySelector('.empty');
-        if (empty) empty.remove();
-        next.prepend(list.lastElementChild);
-      }
-    });
-  }
   // More tasks than room: smaller cards first, each piece for itself.
   function fitPiece(piece) {
     const list = piece.querySelector('.list');
@@ -216,6 +204,24 @@ const CalendarWeek = (() => {
     piece.classList.add('snug');
     if (overflows(list)) { piece.classList.remove('snug'); piece.classList.add('tight'); }
   }
+  // Tasks fill the pieces of a block from the top. A piece first makes its cards smaller; only what then still
+  // doesn't fit moves on to the next piece, in order. A task never leaves a piece on its own.
+  function fitOverPieces(pieces) {
+    const lists = pieces.map(piece => piece.querySelector('.list'));
+    pieces.flatMap(piece => [...piece.querySelectorAll('.chip')]).forEach(chip => lists[0].appendChild(chip));
+    pieces.forEach((piece, i) => {
+      const list = lists[i], next = lists[i + 1];
+      if (list.querySelector('.chip')) list.querySelectorAll('.empty').forEach(el => el.remove());
+      fitPiece(piece);
+      while (next && overflows(list) && list.querySelectorAll('.chip').length > 1) {
+        next.prepend(list.lastElementChild);
+        piece.classList.remove('snug', 'tight');
+        fitPiece(piece);
+      }
+    });
+    lists.filter(list => !list.children.length).forEach(list => { list.innerHTML = dropHere(); });
+  }
+
   function fitBlocks() {
     const byPlace = new Map();
     document.querySelectorAll('#body .block').forEach(piece => {
@@ -223,10 +229,7 @@ const CalendarWeek = (() => {
       if (!byPlace.has(piece.dataset.place)) byPlace.set(piece.dataset.place, []);
       byPlace.get(piece.dataset.place).push(piece);
     });
-    byPlace.forEach(pieces => {
-      if (pieces.length > 1) spreadOverPieces(pieces);
-      pieces.forEach(fitPiece);
-    });
+    byPlace.forEach(pieces => (pieces.length > 1 ? fitOverPieces(pieces) : pieces.forEach(fitPiece)));
   }
 
   return { renderWeek, fitBlocks, chip, xBtn, dropHere, periodTaskChip };

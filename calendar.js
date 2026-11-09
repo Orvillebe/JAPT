@@ -132,11 +132,20 @@ const Calendar = (() => {
     if (e.clientY < chips[0].getBoundingClientRect().top) return { el: chips[0], after: false };
     return { el: chips[chips.length - 1], after: true };
   }
+  // An empty piece of a block with tasks in another piece: before those tasks, or after them.
+  function spotInEmptyPiece(host, drag) {
+    if (!host.classList.contains('block')) return null;
+    const others = [...document.querySelectorAll(`.block[data-place="${host.dataset.place}"] .chip`)]
+      .filter(c => c.dataset.task !== drag.task);
+    if (!others.length) return null;
+    const above = others[0].closest('.block').offsetTop > host.offsetTop;
+    return above ? { el: others[0], after: false } : { el: others[others.length - 1], after: true };
+  }
   // Where in a block or period: between two tasks (the top one is the most important).
   function spotIn(e, host, drag) {
     const selector = host.querySelector('.cydated,.cyown') ? '.cyown .chip' : '.chip';
     const chips = [...host.querySelectorAll(selector)].filter(c => c.dataset.task !== drag.task);
-    if (!chips.length) return null;
+    if (!chips.length) return spotInEmptyPiece(host, drag);
     return host.classList.contains('cycle') ? spotBesideNearest(e, chips) : spotInStack(e, chips, drag);
   }
   // A task on a block is fixed among the other dated tasks of its period: dropping it there does nothing.

@@ -110,43 +110,28 @@ const Store = (() => {
     return ops.some(bringsBackClient) ? keepClientNamesUnique(ops, await DataService.loadBin()) : ops;
   }
 
-  // Saves run one after another. A second action may be built while the first is still on its way, so it
-  // expects the version from before that save. That is no change by someone else: it is brought up to date
-  // here, and only for what this browser itself just saved.
-  let saveChain = Promise.resolve(), saving = 0;
-  const ownVersions = new Map();   // 'table id' -> {seen: versions this browser replaced, latest}
-  function rebaseOnOwnSave(o) {
-    const own = ownVersions.get(`${o.table} ${o.id}`);
-    if (own && o.ifChangedAt !== undefined && own.seen.has(o.ifChangedAt)) o.ifChangedAt = own.latest;
-  }
-  function rememberOwnSave(o, before, row) {
-    if (!before || !row) return;
-    const key = `${o.table} ${o.id}`, own = ownVersions.get(key) || { seen: new Set() };
-    own.seen.add(before.changedAt);
-    own.latest = row.changedAt;
-    ownVersions.set(key, own);
-  }
-  function apply(ops) {
-    saving++;
-    const turn = saveChain.then(() => save(ops));
-    saveChain = turn.catch(() => {}).then(() => { if (--saving === 0) ownVersions.clear(); });
+  // Actions run one after another, whole: each reads memory only when the previous one is done. Without this a
+  // second click while the first is on its way would be built on the state from before that save.
+  let turnChain = Promise.resolve();
+  function inTurn(action) {
+    const turn = turnChain.then(action);
+    turnChain = turn.catch(() => {});
     return turn;
   }
+  const oneAtATime = fn => (...args) => inTurn(() => fn(...args));
 
   // Save ops as one batch and bring memory in line with what was stored. Returns the undo.
-  async function save(ops) {
+  async function apply(ops) {
     ops = ops.filter(Boolean);
     if (!ops.length) return async () => {};
-    ops.forEach(rebaseOnOwnSave);
     const inverse = [];
     const opposites = ops.map(oppositeOf);
-    const before = ops.map(o => (o.op === 'insert' ? null : find(o.table, o.id)));
     const stored = await DataService.batch(ops);
-    ops.forEach((o, i) => { rememberOwnSave(o, before[i], stored[i]); followInMemory(o, stored[i]); });
+    ops.forEach((o, i) => followInMemory(o, stored[i]));
     changed();
     const undoOps = guardedUndo(opposites, stored);
     let undone = false;
-    return async () => {
+    return oneAtATime(async () => {
       if (undone) return;
       undone = true;
       try {
@@ -155,7 +140,7 @@ const Store = (() => {
         undone = false;   // not undone: it can be tried again
         throw e;
       }
-    };
+    });
   }
 
   const ins = (table, row) => ({ op: 'insert', table, row: { id: newId(), ...row } });
@@ -718,19 +703,27 @@ const Store = (() => {
     await reload();
   }
 
-  return {
-    load, reload, onChange, setMeetingsOn,
-    setting, periodActive, periodSetUp,
-    idx, task, goal, client, member, whoOf, members, allMembers, clients, goals, openGoals, tasks, inbox, clientOfTask,
-    listOf, shownList, dueSoon, isLate, itemsOf, goalStats, blocks, segments, periodAt, periodSetting, blocksOn,
-    calendarUrl, plannedFromToday, clientNamed, openTasksOf,
-    taskProblems, goalProblems, clientProblems, memberProblems, calendarUrlProblems, blockProblems, periodProblems,
+  // Everything that saves or reloads takes its turn (see oneAtATime). Inside the Store actions call each other
+  // directly, so a turn never waits for itself.
+  const ACTIONS = {
+    reload,
     createTask, updateTask, setDone, moveToList, plan, unplan, unplanBlocksInPeriod, binTask,
     addInboxTask, processInbox,
     createGoal, updateGoal, achieveGoal, reopenGoal, deleteGoal, renameClient,
     reviseBlock, createBlock, removeBlock, clearDay, copyDay,
     setupPeriod, changePeriod, switchPeriodOn, switchPeriodOff,
     setSetting, setCalendarUrl, addMember, updateMember, removeMember,
-    loadBin, restoreGroup
+    restoreGroup
+  };
+
+  return {
+    load, onChange, setMeetingsOn,
+    setting, periodActive, periodSetUp,
+    idx, task, goal, client, member, whoOf, members, allMembers, clients, goals, openGoals, tasks, inbox, clientOfTask,
+    listOf, shownList, dueSoon, isLate, itemsOf, goalStats, blocks, segments, periodAt, periodSetting, blocksOn,
+    calendarUrl, plannedFromToday, clientNamed, openTasksOf,
+    taskProblems, goalProblems, clientProblems, memberProblems, calendarUrlProblems, blockProblems, periodProblems,
+    loadBin,
+    ...Object.fromEntries(Object.entries(ACTIONS).map(([name, action]) => [name, oneAtATime(action)]))
   };
 })();

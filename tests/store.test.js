@@ -162,6 +162,36 @@ test('two quick actions on the same task don\'t get in each other\'s way', async
   DS.batch = batch;
   eq((await stored('tasks'))[0].title, 'Tweede');
 });
+// A real connection takes time: the second action is clicked while the first is on its way.
+function slow(DS) {
+  const batch = DS.batch.bind(DS);
+  DS.batch = async ops => { await new Promise(r => setTimeout(r, 15)); return batch(ops); };
+  return () => { DS.batch = batch; };
+}
+test('quickly checking and unchecking a repeating task removes the next one again', async () => {
+  const { S, DS, stored } = await app({ tasks: [task('a', { deadline: TODAY, repeat: '1:w' })] });
+  const restore = slow(DS);
+  await Promise.all([S.setDone('a', true), S.setDone('a', false)]);
+  restore();
+  eq(ids(await stored('tasks')), ['a']);
+  eq(S.task('a').doneOn, null);
+});
+test('quickly checking off and moving to the Backlog ends up not done, in the Backlog', async () => {
+  const { S, DS } = await app({ tasks: [task('a')] });
+  const restore = slow(DS);
+  await Promise.all([S.setDone('a', true), S.moveToList('a', 'backlog')]);
+  restore();
+  eq([S.task('a').doneOn, S.task('a').stage], [null, 'backlog']);
+});
+test('an undo waits its turn too', async () => {
+  const { S, DS, stored } = await app({ tasks: [task('a')] });
+  const form = title => ({ title, note: '', goalId: 'g1', who: [], deadline: null, repeat: null });
+  const { undo } = await S.updateTask('a', form('Eerste'));
+  const restore = slow(DS);
+  await Promise.allSettled([S.updateTask('a', form('Tweede')), undo()]);
+  restore();
+  eq((await stored('tasks'))[0].title, 'Tweede');   // the undo found a newer version and was refused
+});
 test('a quick action still refuses what someone else changed', async () => {
   const { S, DS, stored } = await app({ tasks: [task('a')] });
   const batch = DS.batch.bind(DS);

@@ -2,7 +2,7 @@
 
 Weekly planning for a small agency team. Tasks hang under goals, goals under clients (or *Intern*). You collect tasks in the Inbox, give them a goal, and drag them into the team's standard work blocks or into a longer work period. Meetings from the team's kSuite agenda (its link is a setting in Beheer) show between the blocks. Static site, no build step.
 
-**Status: works against its own Supabase database, not live yet.** Everything in the mockup works, plus the Bin, the three looks, the agenda link, backup and analysis export, logins and teams. Not built yet: restoring a backup into the database (the export exists, the way back doesn't), and a test of the whole thing with a real mouse and phone is still to come.
+**Status: works against its own Supabase database, not live yet.** Everything in the mockup works, plus the Bin, the three looks, the agenda link, backup and analysis export, logins and teams. A test of the whole thing with a real mouse and phone is still to come.
 
 What the user sees and does is in the interaction mockup [`docs/JAPT_userinteraction_mockup.html`](docs/JAPT_userinteraction_mockup.html). What the software stores and decides is in [`docs/design.md`](docs/design.md).
 
@@ -34,6 +34,18 @@ JAPT is static files and a Supabase project. Someone else can run it on their ow
 **Inviting someone:** Authentication > Users > Invite. They join your team by themselves but have no access yet: set `allowed` to true for them in Table Editor > `members`. Beheer then sets their name and colour.
 
 **Another backend than Supabase:** write a new `data-....js` that offers the functions listed in `data-service.js`, and name it in `deployment.js`. `model.js`, the Store and the screens stay as they are. What you may reach must then be enforced on that backend: the rules in `migrations/` only exist in Postgres, and nothing in a browser can enforce them.
+
+## Restoring a backup
+
+The free Supabase plan has no restorable backups, so the file from Beheer > Back-up is the safety net.
+
+1. The migrations have run and the team exists (`tools/first-team.sql`). Logins are not in a backup: make them again first.
+2. Open `tools/restore.html`, fill in the team and choose the file. It stays in your browser.
+3. Paste the script in the **SQL Editor** and run it. The counts at the end should match the first lines of the script.
+
+By default the script only goes into an empty team, and otherwise stops without changing anything. **To put an older state back over a team that holds planning,** tick *Vervang wat nu in dit team staat*. Wiping and restoring then happen in one transaction: if anything fails, the team stays as it was. If it succeeds, everything made after the backup is gone, so make a backup of the current state first.
+
+Someone from the backup is matched to someone in the team by login, or else by name. Without a match they come back without a login; link them in Table Editor > `members`. The agenda link comes back too, so keep a backup file as safe as the agenda itself.
 
 ## Updating
 
@@ -80,12 +92,16 @@ node tests/release.test.js
 ```
 
 ```bash
+node tests/restore.test.js
+```
+
+```bash
 node tests/teams.test.js
 ```
 
 The first tests the rules (dates, blocks, work periods, lists, deadlines, repeats, order, filters). The second tests saving on the local data layer: all or nothing, undo, the check on changes by someone else, and the rules that need more than one row. The third checks that every file in `index.html` carries the app version, that no line of code is over 140 characters, and that the escape test has a step for every calendar view and Beheer tab.
 
-The fourth runs against the real database and proves that one team can't reach another team's data: on every table and on the save function, a login of team A tries to read, add, change and delete what is team B's. It needs two test logins (`japt-test-a@example.com` and `japt-test-b@example.com`), then `tools/teams-test-setup.sql` once, and their passwords in `tests/teams-test.env`, which stays out of git:
+The fourth checks that a backup becomes a correct restore script. The fifth runs against the real database and proves that one team can't reach another team's data: on every table and on the save function, a login of team A tries to read, add, change and delete what is team B's. It needs two test logins (`japt-test-a@example.com` and `japt-test-b@example.com`), then `tools/teams-test-setup.sql` once, and their passwords in `tests/teams-test.env`, which stays out of git:
 
 ```
 JAPT_TEST_A_PASSWORD=...
@@ -121,7 +137,8 @@ One file per task; each file starts with what it is responsible for.
 | `manage-blocks.js`, `manage-period.js`, `manage-other.js` | The tabs Werkblokken and Werkperiode; the seven small tabs |
 | `agenda.js`, `export.js` | Meetings from the agenda link; backup and analysis export |
 | `app.js` | Starting, login, version check, pages, reloading at natural moments |
-| `migrations/` | The database, one numbered file per change; `tools/first-team.sql` for a new installation |
+| `migrations/` | The database, one numbered file per change |
+| `tools/` | `first-team.sql` for a new installation, `restore.html` to put a backup back, `teams-test-setup.sql` for the teams test |
 
 ## Possible future
 

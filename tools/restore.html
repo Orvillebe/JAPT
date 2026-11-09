@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JAPT back-up terugzetten</title>
+<!-- Restore: turns a backup file into an SQL script for the Supabase SQL Editor.
+     Everything happens in this browser; the backup file is not sent anywhere. -->
+<style>
+  body { font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #f6f5f2; color: #232323; max-width: 760px; margin: 40px auto; padding: 0 16px }
+  button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; margin-right: 8px }
+  button:disabled { opacity: .4; cursor: default }
+  input[type=text] { font: inherit; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px }
+  textarea { width: 100%; box-sizing: border-box; height: 320px; font: 12px/1.4 ui-monospace, Menlo, monospace; border: 1px solid #ddd; border-radius: 8px; padding: 10px }
+  .note { background: #fff4dc; border: 1px solid #efce8a; border-radius: 8px; padding: 10px 12px; font-size: 14px }
+  #out { margin: 12px 0; font-size: 14px; font-weight: 600 }
+</style>
+</head>
+<body>
+<h1>Back-up terugzetten</h1>
+<p>Maakt van een back-upbestand (Beheer, Back-up) een SQL-script dat de planning terugzet in de database. Het bestand blijft in deze browser; er wordt niets verstuurd.</p>
+<div class="note">
+  <b>Vooraf:</b> alle migraties moeten gedraaid zijn en het team moet bestaan en nog leeg zijn (<code>tools/first-team.sql</code>). Logins maak je opnieuw aan in Supabase, liefst vóór je het script draait: wie dezelfde naam heeft als in de back-up, krijgt zo meteen de juiste taken terug.
+</div>
+<p><label>Naam van het team: <input type="text" id="team" placeholder="bv. Orville"></label></p>
+<p><label><input type="checkbox" id="replace"> Vervang wat nu in dit team staat</label></p>
+<div class="note" id="replaceNote" hidden>
+  <b>Let op:</b> alles wat na deze back-up gemaakt werd, is daarna weg. Maak eerst een back-up van de huidige toestand (Beheer, Back-up), voor het geval je je vergist. Mislukt het script, dan verandert er niets.
+</div>
+<p><input type="file" id="file" accept="application/json,.json"></p>
+<div id="out"></div>
+<textarea id="sql" readonly placeholder="Het SQL-script verschijnt hier."></textarea>
+<p><button id="copy" disabled>Script kopiëren</button><button id="save" disabled>Bewaren als .sql</button></p>
+<p>Daarna: Supabase › SQL Editor › New query › plakken › Run. De telling onderaan moet overeenkomen met de eerste regels van het script.</p>
+<script src="../version.js"></script>
+<script src="../tables.js"></script>
+<script src="../id.js"></script>
+<script src="../data-local.js"></script>
+<script src="restore.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  let backup = null, filename = 'japt-restore.sql';
+  function build() {
+    $('sql').value = '';
+    $('copy').disabled = $('save').disabled = true;
+    if (!backup) return;
+    try {
+      const local = createLocalData();
+      const replace = $('replace').checked;
+      $('sql').value = buildRestoreSql(backup, b => local.upgradeBackup(b), SCHEMA_VERSION, $('team').value, { replace });
+      filename = 'japt-restore-' + (backup.exportedAt || '').slice(0, 10) + '.sql';
+      const when = (backup.exportedAt || '').slice(0, 16).replace('T', ' ');
+      $('out').textContent = (replace ? `Vervangt team ${$('team').value.trim()} door de back-up van ${when}. ` : '')
+        + $('sql').value.split('\n')[2].replace(/^-- /, '');
+      $('copy').disabled = $('save').disabled = false;
+    } catch (err) { $('out').textContent = 'Geen script: ' + err.message; }
+  }
+  $('file').onchange = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try { backup = JSON.parse(await file.text()); build(); }
+    catch (err) { backup = null; $('out').textContent = 'Dit bestand kan ik niet lezen.'; }
+  };
+  $('team').oninput = build;
+  $('replace').onchange = () => { $('replaceNote').hidden = !$('replace').checked; build(); };
+  $('copy').onclick = async () => { await navigator.clipboard.writeText($('sql').value); $('out').textContent = 'Gekopieerd. Plak het in een nieuwe query in de SQL Editor.'; };
+  $('save').onclick = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([$('sql').value], { type: 'text/plain' }));
+    a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+</script>
+</body>
+</html>

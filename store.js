@@ -110,14 +110,39 @@ const Store = (() => {
     return ops.some(bringsBackClient) ? keepClientNamesUnique(ops, await DataService.loadBin()) : ops;
   }
 
+  // Saves run one after another. A second action may be built while the first is still on its way, so it
+  // expects the version from before that save. That is no change by someone else: it is brought up to date
+  // here, and only for what this browser itself just saved.
+  let saveChain = Promise.resolve(), saving = 0;
+  const ownVersions = new Map();   // 'table id' -> {seen: versions this browser replaced, latest}
+  function rebaseOnOwnSave(o) {
+    const own = ownVersions.get(`${o.table} ${o.id}`);
+    if (own && o.ifChangedAt !== undefined && own.seen.has(o.ifChangedAt)) o.ifChangedAt = own.latest;
+  }
+  function rememberOwnSave(o, before, row) {
+    if (!before || !row) return;
+    const key = `${o.table} ${o.id}`, own = ownVersions.get(key) || { seen: new Set() };
+    own.seen.add(before.changedAt);
+    own.latest = row.changedAt;
+    ownVersions.set(key, own);
+  }
+  function apply(ops) {
+    saving++;
+    const turn = saveChain.then(() => save(ops));
+    saveChain = turn.catch(() => {}).then(() => { if (--saving === 0) ownVersions.clear(); });
+    return turn;
+  }
+
   // Save ops as one batch and bring memory in line with what was stored. Returns the undo.
-  async function apply(ops) {
+  async function save(ops) {
     ops = ops.filter(Boolean);
     if (!ops.length) return async () => {};
+    ops.forEach(rebaseOnOwnSave);
     const inverse = [];
     const opposites = ops.map(oppositeOf);
+    const before = ops.map(o => (o.op === 'insert' ? null : find(o.table, o.id)));
     const stored = await DataService.batch(ops);
-    ops.forEach((o, i) => followInMemory(o, stored[i]));
+    ops.forEach((o, i) => { rememberOwnSave(o, before[i], stored[i]); followInMemory(o, stored[i]); });
     changed();
     const undoOps = guardedUndo(opposites, stored);
     let undone = false;

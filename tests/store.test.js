@@ -153,6 +153,28 @@ test('saving a form of something deleted meanwhile says so, and changes nothing'
   await refused(w, () => S.deleteGoal('g1', 'del'), ['name']);
 });
 
+test('two quick actions on the same task don\'t get in each other\'s way', async () => {
+  const { S, DS, stored } = await app({ tasks: [task('a')] });
+  const batch = DS.batch.bind(DS);
+  DS.batch = async ops => { await new Promise(r => setTimeout(r, 15)); return batch(ops); };   // a real connection
+  const form = title => ({ title, note: '', goalId: 'g1', who: [], deadline: null, repeat: null });
+  await Promise.all([S.updateTask('a', form('Eerste')), S.updateTask('a', form('Tweede'))]);
+  DS.batch = batch;
+  eq((await stored('tasks'))[0].title, 'Tweede');
+});
+test('a quick action still refuses what someone else changed', async () => {
+  const { S, DS, stored } = await app({ tasks: [task('a')] });
+  const batch = DS.batch.bind(DS);
+  await tick();
+  await batch([{ op: 'update', table: 'tasks', id: 'a', fields: { note: 'collega' } }]);
+  DS.batch = async ops => { await new Promise(r => setTimeout(r, 15)); return batch(ops); };
+  const form = { title: 'Mijn', note: '', goalId: 'g1', who: [], deadline: null, repeat: null };
+  const results = await Promise.allSettled([S.updateTask('a', form), S.updateTask('a', form)]);
+  DS.batch = batch;
+  eq(results.map(r => r.status), ['rejected', 'rejected']);
+  eq((await stored('tasks'))[0].note, 'collega');
+});
+
 /* ---------- undo ---------- */
 
 test('undo takes a new task and its people away', async () => {

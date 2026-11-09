@@ -2,7 +2,7 @@
 
 Weekly planning for a small agency team. Tasks hang under goals, goals under clients (or *Intern*). You collect tasks in the Inbox, give them a goal, and drag them into the team's standard work blocks or into a longer work period. Meetings from the team's kSuite agenda (its link is a setting in Beheer) show between the blocks. Static site, no build step.
 
-**Status: first local version.** Everything in the mockup works on local test data in your browser, plus the Bin, the three looks, the agenda link, backup and analysis export. Not built yet: the Supabase data layer and database migrations (the live address says so instead of falling back to local data), restoring a backup into the database, and the full README sections (setup, privacy, troubleshooting).
+**Status: works against its own Supabase database, not live yet.** Everything in the mockup works, plus the Bin, the three looks, the agenda link, backup and analysis export, logins and teams. Not built yet: restoring a backup into the database (the export exists, the way back doesn't), and a test of the whole thing with a real mouse and phone is still to come.
 
 What the user sees and does is in the interaction mockup [`docs/JAPT_userinteraction_mockup.html`](docs/JAPT_userinteraction_mockup.html). What the software stores and decides is in [`docs/design.md`](docs/design.md).
 
@@ -12,7 +12,58 @@ What the user sees and does is in the interaction mockup [`docs/JAPT_userinterac
 2. Open `http://localhost:8766/tests/load-testdata.html` and click **Testdata laden**. The test data is built around today, so it never goes stale.
 3. Open `http://localhost:8766/`.
 
-Everything stays in this browser (localStorage). The real database is only used on the live address (`productionHosts` in `deployment.js`).
+Everything stays in this browser (localStorage), so trying things out can't touch the real database.
+
+To work against the real database from your own computer, open `http://localhost:8766/?db=live` and log in. Without `?db=live` you are on the test data again.
+
+## Installing it on your own database
+
+JAPT is static files and a Supabase project. Someone else can run it on their own project with their own copy of this code; only `deployment.js` differs.
+
+1. Make a Supabase project, in the EU if you are in the EU.
+2. **Authentication > Sign In / Providers:** switch *Allow new users to sign up* off, keep *Confirm email* on.
+3. **Authentication > URL Configuration:** set the Site URL to the address where JAPT will run. Links in invitation mails go there.
+4. **Authentication > Users:** add your own login.
+5. In the **SQL Editor**, run every file in `migrations/` once, in number order.
+6. Change the team name in `tools/first-team.sql` and run it. Everyone who already has a login joins that team and gets access.
+7. Fill in `deployment.js`: your address, the Project URL and the publishable key (Settings > API). Never the secret key.
+8. Put the files online, on any host for static files.
+
+**On an address that isn't in `deployment.js`, JAPT refuses to start**, so a forgotten address can't look as if it works while saving in one browser only.
+
+**Inviting someone:** Authentication > Users > Invite. They join your team by themselves but have no access yet: set `allowed` to true for them in Table Editor > `members`. Beheer then sets their name and colour.
+
+**Another backend than Supabase:** write a new `data-....js` that offers the functions listed in `data-service.js`, and name it in `deployment.js`. `model.js`, the Store and the screens stay as they are. What you may reach must then be enforced on that backend: the rules in `migrations/` only exist in Postgres, and nothing in a browser can enforce them.
+
+## Updating
+
+The app compares its database version with the database when it starts (`SCHEMA_VERSION` in `version.js`). An update with a new file in `migrations/` asks for this order: run the new migration first, then put the new files online. Until then the app says the database is out of date and saves nothing.
+
+## Configuration
+
+| File | For |
+|---|---|
+| `deployment.js` | What makes this installation this one: addresses, backend, Supabase project |
+| `config.js` | Settings that change rarely, each with its reason: Bin days, reminder days, hours shown |
+| Beheer, in the app | Work blocks, work period, first day of the week, people, the agenda link, the look (per device) |
+
+## Privacy
+
+- Your planning is stored in your own Supabase project. The agenda link is a setting in that database and is never in the code.
+- No telemetry and no analytics. Personal view settings (filters, folded lists, the look) stay on the device.
+- The browser fetches the agenda straight from the agenda link, the fonts from Google Fonts, and two scripts from jsDelivr. Those scripts are pinned with an integrity hash, so a changed file is refused.
+- Row Level Security in the database keeps teams apart; `tests/teams.test.js` proves it.
+- The free Supabase plan has no restorable backups: make a backup in Beheer now and then.
+
+## Troubleshooting
+
+| You see | What it means |
+|---|---|
+| "JAPT is niet ingesteld voor het adres ..." | The address isn't in `productionHosts` in `deployment.js` |
+| The database is out of date | A migration still has to run, in number order |
+| You are logged in but have no access | Set `allowed` to true in Table Editor > `members` |
+| Nothing changes after an update | Reload without the cache: Cmd+Shift+R |
+| The project doesn't answer | The free plan pauses a project after about a week without use; resume it in Supabase |
 
 ## Tests
 
@@ -28,7 +79,18 @@ node tests/store.test.js
 node tests/release.test.js
 ```
 
+```bash
+node tests/teams.test.js
+```
+
 The first tests the rules (dates, blocks, work periods, lists, deadlines, repeats, order, filters). The second tests saving on the local data layer: all or nothing, undo, the check on changes by someone else, and the rules that need more than one row. The third checks that every file in `index.html` carries the app version, that no line of code is over 140 characters, and that the escape test has a step for every calendar view and Beheer tab.
+
+The fourth runs against the real database and proves that one team can't reach another team's data: on every table and on the save function, a login of team A tries to read, add, change and delete what is team B's. It needs two test logins (`japt-test-a@example.com` and `japt-test-b@example.com`), then `tools/teams-test-setup.sql` once, and their passwords in `tests/teams-test.env`, which stays out of git:
+
+```
+JAPT_TEST_A_PASSWORD=...
+JAPT_TEST_B_PASSWORD=...
+```
 
 **Escape test, in the browser:** open `http://localhost:8766/tests/escape.html` and click **Test starten**. It fills every text people can type with a piece of HTML, opens every screen, window, picker and tab (wide and phone-sized), and fails when that text ever becomes real HTML in the page instead of text. That would let a task title run as code for everyone who sees it. Your local data is put aside and put back. Run it before every release; a new screen or window needs a new step in `STEPS`.
 
@@ -38,11 +100,13 @@ One file per task; each file starts with what it is responsible for.
 
 | File | Does |
 |---|---|
+| `deployment.js` | What makes this installation this one: addresses, backend, Supabase project |
 | `config.js`, `version.js` | Settings that change rarely; app and database version |
 | `i18n/nl.js`, `i18n/i18n.js` | All interface text, by key |
 | `model.js` | The rules as pure functions, without DOM or storage |
 | `tables.js` | The names of the database tables, for the Store and every data layer |
-| `data-local.js`, `data-service.js` | Storage in this browser; picking the data layer |
+| `data-service.js` | Picks the data layer, and the contract every data layer offers |
+| `data-local.js`, `data-supabase.js` | Storage in this browser; storage in Supabase, and the login |
 | `store.js` | Data in memory; every action as one save with its undo |
 | `ui.js` | Shared pieces: cards, windows, the Escape key, toast |
 | `filter-picker.js`, `goal-picker.js`, `deadline-picker.js` | The fold-out lists to choose filters, a goal, a deadline with its repeat |
@@ -56,7 +120,8 @@ One file per task; each file starts with what it is responsible for.
 | `manage.js` | The Beheer window: tabs and drawing |
 | `manage-blocks.js`, `manage-period.js`, `manage-other.js` | The tabs Werkblokken and Werkperiode; the seven small tabs |
 | `agenda.js`, `export.js` | Meetings from the agenda link; backup and analysis export |
-| `app.js` | Starting, version check, pages, reloading at natural moments |
+| `app.js` | Starting, login, version check, pages, reloading at natural moments |
+| `migrations/` | The database, one numbered file per change; `tools/first-team.sql` for a new installation |
 
 ## Possible future
 
@@ -70,8 +135,8 @@ Not built, but prepared for. Each can be added without changing the data that ex
 - **Adding to the Inbox without a connection:** new Inbox tasks wait on the phone and are sent once there is a connection. The first version is already built for it (ids made in the app, one save per Inbox task that can safely be sent twice); what's left is the queue and a service worker, built together with the installable app.
 - **Live updates** when a colleague changes something. The first version loads their changes when the app opens, when you come back to the tab, and when you move to another day or week.
 - **A second interface language.**
-- **More users: many small teams, not bigger teams.** The use case is an agency or a freelancer, and many of those, not the multinational. The database has a team on every row from the start, and teams are kept apart; signing up, creating teams and paying are not built.
+- **More users: many small teams, not bigger teams.** The use case is an agency or a freelancer, and many of those, not the multinational. The database has a team on every row from the start, and teams are kept apart; signing up, creating teams from the app, inviting from the app and paying are not built.
 
 ## License
 
-**Assumption:** the same as JAFT (MIT with the Commons Clause). See `LICENSE` once the repository is set up.
+MIT with the Commons Clause, see [`LICENSE`](LICENSE): free to use and change, not to sell.

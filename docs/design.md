@@ -2,7 +2,7 @@
 
 How JAPT works and why: users and hosting, the data model, the rules, and how the app can change while the database keeps its data. It is read from the interaction mockup (`docs/JAPT_userinteraction_mockup.html`). The mockup shows what the user sees and does; this file says what the real software stores and decides.
 
-**Status: agreed, ready to build.** Items marked **Assumption** follow JAFT or the mockup unless you say otherwise.
+**Status: built and running against its own database; not live yet.** Items marked **Assumption** follow JAFT or the mockup unless you say otherwise.
 
 ## 0. Decisions so far
 
@@ -28,13 +28,13 @@ How JAPT works and why: users and hosting, the data model, the rules, and how th
 
 - **Users:** a small agency team. Everyone in a team sees and changes everything of that team. No roles.
 - **Database:** its own Supabase project, EU region, free plan. Row Level Security on every table, self-registration off, users are invited, and every rule checks "logged in and on the access list of the team this row belongs to" (`members.allowed`, see *Teams*).
-- **Swappable data layer:** the app talks to one data layer (`data-service.js`). Local storage for testing, Supabase in production. Which one follows from the address (`productionHosts` in `deployment.js`), so testing never reaches the real database.
+- **Swappable data layer:** the app talks to one data layer (`data-service.js`). Local storage for testing, Supabase in production. Which one follows from the address: the addresses in `deployment.js` use the real database, your own computer or network uses local data unless the address ends in `?db=live`, and any other address refuses to start, so a forgotten address can't look as if it works while saving in one browser only. Everything that differs per installation is in `deployment.js`, so someone can run the same code on their own database, or on another backend by writing a data layer for the functions listed in `data-service.js`.
 - **Hosting:** static files, no build step, GitHub Pages. Branch `dev` for work, `main` is live.
 - **Personal view settings stay on the device:** current view (Taken, Doelen, Inbox), calendar mode, grouping, filters, folded lists, hidden sidebar. They are not shared and not in the database.
 
 ## 2. Backups
 
-**Assumption:** as in JAFT. A backup export in Beheer (everything of your team as one JSON file, date of last export shown) and `tools/restore.html` to turn a backup into SQL. The free Supabase plan has no restorable backups.
+**Assumption:** as in JAFT. A backup export in Beheer (everything of your team as one JSON file, date of last export shown) and, still to be built, `tools/restore.html` to turn a backup into SQL. The free Supabase plan has no restorable backups.
 
 ## 3. Language
 
@@ -105,9 +105,9 @@ classDiagram
 
 `derived` means calculated, never stored.
 
-### Database tables (proposal)
+### Database tables
 
-Every table except `teams` and `schema_migrations` has `team_id`. Every table also has `created_by`, `created_at`, `changed_by` and `changed_at`; tasks, goals and clients also have `deleted_at` for the Bin.
+As built in `migrations/001_initial.sql`. Keys are `(team_id, id)`, ids are made in the app. Every table except `teams` and `schema_migrations` has `team_id`. Every table also has `created_by`, `created_at`, `changed_by` and `changed_at`; tasks, goals and clients also have `deleted_at` for the Bin.
 
 | Table | Holds |
 |---|---|
@@ -117,9 +117,9 @@ Every table except `teams` and `schema_migrations` has `team_id`. Every table al
 | `goals` | Name, note, colour (`hue`), client or none, `achieved_on`. |
 | `tasks` | Title, note, goal (empty only while in the Inbox), `stage` (`inbox`, `open`, `backlog`), `done_on`, deadline, repeat (`3:m`), `next_task_id` for the repeat it made, `position` for the manual order. |
 | `task_members` | Who is on a task: none, one or more. |
-| `work_blocks` | The standard week: weekday, start and end (minutes), optional name, `valid_from` and `valid_to`. A change makes a new row from today, so past weeks stay as they were. |
-| `block_placements` | A task in a block on a date (`date`, `block_id`, `task_id`, `position`). This is the mockup's `S.plan['2026-11-04|wo-vm']`. |
-| `period_segments` | The work period setting: from, length, unit. A change is a new segment from a future date. |
+| `work_blocks` | The standard week: weekday, `start_min` and `end_min`, optional name, `valid_from` and `valid_to`. A change makes a new row from today, so past weeks stay as they were. |
+| `block_placements` | A task in a block on a date (`on_date`, `block_id`, `task_id`, `position`). This is the mockup's `S.plan['2026-11-04|wo-vm']`. |
+| `period_segments` | The work period setting: `from_date`, length, unit. A change is a new segment from a future date. |
 | `period_placements` | A task in a work period, without day or hour (`period_start`, `task_id`, `position`). The mockup's `S.plan['cy@2026-11-02']`. |
 | `calendars` | The agendas meetings come from: name, link (`url`) and `owner` (empty = the team). Set in Beheer. Readable only by members on the access list. One row for now. |
 | `app_settings` | Settings shared within a team: first day of the week, deadline reminder days, work period on or off. One row per team and setting (key `team_id` + `id`). |
@@ -241,12 +241,15 @@ Decided on 2026-11-09: one shared database and one version of the software for e
 
 **What the first migration does:**
 
-- `teams`, and `team_id` on every table that holds team data. One team to start with, Orville.
+- `teams`, and `team_id` on every table that holds team data. The first team isn't in a migration but in `tools/first-team.sql`, so another installation gets its own name.
+- **New logins:** with exactly one team, a new login joins it automatically, but with `allowed` false: someone created by mistake can log in and sees nothing.
+- **`apply_batch`** saves a group of changes all or nothing, with the rights of the user, and refuses a change on a row someone else changed since.
+- **References are checked at the end of a save,** because one save may add a row and point to it in any order.
 - **Row Level Security keeps teams apart:** on every table, for reading, adding, changing and deleting, the row's team must be one you are an allowed member of. It also checks the new value, so a row can't be written into another team, and `team_id` can't be changed afterwards.
 - **No reference across teams:** a task can only point to a goal of its own team, and the same for every other reference (foreign keys on team and id together).
 - **Unique within a team:** client and user names, and settings.
 - **One narrow function may look past the rules:** `my_team_ids()` returns the teams of the person asking. It is needed because the rule on `members` can't read `members` itself. Everything else, including the function that saves a batch, runs with the rights of the user.
-- An index on `team_id` for every table.
+- Keys start with `team_id`, so reading one team is fast.
 
 **In the code:** only the Supabase data layer knows about teams. It loads one team, adds `team_id` when it saves, and takes it off what it returns. `model.js`, the Store and the screens stay as they are, and the local version is one team without saying so. The team that is open is the first one you are a member of; choosing another is for when someone can be in two.
 
@@ -278,11 +281,12 @@ Decided on 2026-11-09: one shared database and one version of the software for e
 
 - The mockup's data becomes `tests/testdata.js`, extended with a believable history: many tasks, long titles, past weeks with changed blocks, repeats, an achieved goal, an empty week.
 - Pure logic (which list, periods, repeats, block validity) lives in `model.js` without DOM or database, with tests.
-- Local storage first, as with JATL and JAFT. Supabase follows once the local version behaves like the mockup.
+- Local storage first, as with JATL and JAFT, then Supabase.
 - **Typed text stays text:** screens build HTML as text and pass everything people typed through `UI.esc()`. `tests/escape.html` proves it in a browser: every typed field is filled with HTML, every screen, window, picker and tab is opened (wide and phone-sized), and one real element made from typed text fails the test. It was checked to fail by removing `esc()` on purpose (in text and in an attribute). `tests/release.test.js` fails when a calendar view or Beheer tab has no step in it, and when a line of code is over 140 characters.
 - **Saving is tested too:** `tests/store.test.js` runs the Store on the local data layer in node: all or nothing, undo, the `changed_at` check, and the rules that need more than one row.
 - **Scripts from outside are pinned:** a script from a CDN carries an `integrity` hash, so the browser refuses a file that isn't exactly the one checked. `tests/release.test.js` fails without it. The Google Fonts stylesheet can't have one, because Google serves different CSS per browser; a stylesheet can't read the login.
-- **Before every release:** `node tests/model.test.js`, `node tests/store.test.js`, `node tests/release.test.js`, and `tests/escape.html` in the browser.
+- **Teams are kept apart, proven against the real database:** `tests/teams.test.js`. It was checked to fail by breaking the rule on one table and switching Row Level Security off on another.
+- **Before every release:** `node tests/model.test.js`, `node tests/store.test.js`, `node tests/release.test.js`, `tests/escape.html` in the browser. After a change in `migrations/`: `node tests/teams.test.js` too.
 
 ## 8. Possible future
 

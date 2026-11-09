@@ -87,29 +87,25 @@ const ManagePeriod = (() => {
     const n = Math.max(PERIOD_MIN_LENGTH, Math.min(PERIOD_MAX_LENGTH, entered)), unit = $('mCyU').value;
     return unit === UNIT.MONTHS ? { length: n, unit: UNIT.MONTHS } : { length: n * +unit, unit: UNIT.DAYS };
   }
-  // Without redrawing when it can't be saved, so what you typed stays.
-  async function applyPeriod(quiet) {
+  // Saves what is filled in with this Store action. When it can't be saved nothing is redrawn, so what
+  // you typed stays.
+  async function saveForm(storeAction) {
     const { length, unit } = periodForm(), from = $('mCyStart').value;
     const bad = Store.periodProblems(from);
-    if (bad) { showErr(t(Object.values(bad)[0])); return false; }
-    if ((await UI.act(() => Store.changePeriod(from, length, unit))) === null) return false;
-    if (!quiet) done();
-    return true;
+    if (bad) { showErr(t(Object.values(bad)[0])); return; }
+    if ((await UI.act(() => storeAction(from, length, unit))) !== null) done();
   }
   async function makePeriod() {
     const { length, unit } = periodForm();
-    await UI.act(() => Store.setupPeriod($('mCyStart').value || td(), length, unit));
-    done();
+    const saved = await UI.act(() => Store.setupPeriod($('mCyStart').value || td(), length, unit));
+    if (saved !== null) done();
   }
-  async function savePeriod() { await applyPeriod(); }
+  const savePeriod = () => saveForm(Store.changePeriod);
   async function togglePeriod() {
-    if (!Store.periodActive()) {
-      if (!(await applyPeriod(true))) return;   // switching on also takes what you just filled in
-      await UI.act(() => Store.setPeriodActive(true));
-      done();
-      return;
-    }
-    const back = await UI.act(() => Store.setPeriodActive(false));
+    // Switching on also takes what you just filled in.
+    if (!Store.periodActive()) { await saveForm(Store.switchPeriodOn); return; }
+    const back = await UI.act(() => Store.switchPeriodOff());
+    if (back === null) return;
     done();
     if (back) UI.toast(UI.tn('toast.back_to_open', back));
   }

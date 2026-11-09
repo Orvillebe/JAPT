@@ -215,15 +215,15 @@ const ManageOther = (() => {
   }
 
   async function changeUser(field, id) {
-    if (field.dataset.uc) {
-      await UI.act(() => Store.updateMember(id, { color: field.value }));
-      done();
-      return;
+    let fields;
+    if (field.dataset.uc) fields = { color: field.value };
+    else {
+      const name = field.value.trim(), bad = Store.memberProblems(id, name);
+      if (bad) { showErr(t(bad.name)); return; }
+      fields = { name };
     }
-    const name = field.value.trim(), bad = Store.memberProblems(id, name);
-    if (bad) { showErr(t(bad.name)); return; }
-    await UI.act(() => Store.updateMember(id, { name }));
-    done();
+    // Not saved: no redraw, so what was typed stays.
+    if ((await UI.act(() => Store.updateMember(id, fields))) !== null) done();
   }
 
   // These save at once and leave the window's question and message; false when it is another field.

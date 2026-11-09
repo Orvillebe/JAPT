@@ -453,11 +453,31 @@ test('a change of the period takes effect later and keeps what is planned', asyn
 });
 test('switching the period off: placements go, and it says how many tasks went back', async () => {
   const { S, stored } = await app({ tasks: [task('a'), task('b')], period_placements: [inPeriod('q1', 'a'), inPeriod('q2', 'b')], block_placements: [inBlock('p1', 'b', NEXT_MONDAY, 'ma')] });
-  eq(await S.setPeriodActive(false), 1);
+  eq(await S.switchPeriodOff(), 1);
   eq(await stored('period_placements'), []);
   eq(S.periodActive(), false);
   eq(S.listOf(S.task('a')), 'open');
   eq(S.listOf(S.task('b')), 'planned');
+});
+
+test('switching the period on takes what was filled in, in one save', async () => {
+  const { S, stored } = await app({ app_settings: [row({ id: 'periodActive', value: false })] });
+  await S.switchPeriodOn('2026-11-16', 7, 'd');
+  eq(S.periodActive(), true);
+  eq((await stored('period_segments')).length, 2);
+});
+test('switching the period on with a date that isn\'t allowed changes nothing', async () => {
+  const w = await app({ app_settings: [row({ id: 'periodActive', value: false })] });
+  await refused(w, () => w.S.switchPeriodOn(TODAY, 7, 'd'), ['from']);
+});
+test('when switching the period on fails, nothing of it is saved', async () => {
+  const { S, DS, stored } = await app({ app_settings: [row({ id: 'periodActive', value: false })] });
+  const batch = DS.batch;
+  DS.batch = async () => { throw new Error('offline'); };
+  await assert.rejects(S.switchPeriodOn('2026-11-16', 7, 'd'));
+  DS.batch = batch;
+  eq(S.periodActive(), false);
+  eq((await stored('period_segments')).length, 1);
 });
 
 /* ---------- people ---------- */

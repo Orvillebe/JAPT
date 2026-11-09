@@ -531,8 +531,7 @@ const Store = (() => {
     });
   }
   // Length and start together.
-  async function changePeriod(from, length, unit) {
-    refuse(periodProblems(from));
+  function periodChangeOps(from, length, unit) {
     const { segs, last, futureLast, solo } = periodState();
     const lenChanged = length !== last.length || unit !== last.unit;
     const dateChanged = from !== (solo ? last.from : M.nextPeriodStart(segs));
@@ -546,19 +545,24 @@ const Store = (() => {
       ops.push(o);
       after = [...segs, o.row];
     }
-    return apply(ops.concat(periodCleanOps(after)));
+    return ops.concat(periodCleanOps(after));
+  }
+  async function changePeriod(from, length, unit) {
+    refuse(periodProblems(from));
+    return apply(periodChangeOps(from, length, unit));
+  }
+  // On, together with what was just filled in: one save, so it can't end up half done.
+  async function switchPeriodOn(from, length, unit) {
+    refuse(periodProblems(from));
+    return apply([...periodChangeOps(from, length, unit), settingOp('periodActive', true)]);
   }
   // Off: all period placements go; tasks only in a period go back to Nog niet ingepland. Returns their count.
-  async function setPeriodActive(on) {
-    if (!on) {
-      const onlyInPeriod = k => !idx().of(k.id).blocks.length && idx().of(k.id).periods.length;
-      const back = tasks().filter(k => !k.doneOn && onlyInPeriod(k)).length;
-      const placements = raw.period_placements.map(p => del('period_placements', p.id));
-      await apply([...placements, settingOp('periodActive', false)]);
-      return back;
-    }
-    await apply([settingOp('periodActive', true), ...periodCleanOps(segments())]);
-    return 0;
+  async function switchPeriodOff() {
+    const onlyInPeriod = k => !idx().of(k.id).blocks.length && idx().of(k.id).periods.length;
+    const back = tasks().filter(k => !k.doneOn && onlyInPeriod(k)).length;
+    const placements = raw.period_placements.map(p => del('period_placements', p.id));
+    await apply([...placements, settingOp('periodActive', false)]);
+    return back;
   }
 
   /* ---------- settings, members, agenda ---------- */
@@ -624,7 +628,7 @@ const Store = (() => {
     addInboxTask, processInbox,
     createGoal, updateGoal, achieveGoal, reopenGoal, deleteGoal, renameClient,
     reviseBlock, createBlock, removeBlock, clearDay, copyDay,
-    setupPeriod, changePeriod, setPeriodActive,
+    setupPeriod, changePeriod, switchPeriodOn, switchPeriodOff,
     setSetting, setCalendarUrl, addMember, updateMember, removeMember,
     loadBin, restoreGroup
   };

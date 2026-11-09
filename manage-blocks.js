@@ -27,9 +27,9 @@ const ManageBlocks = (() => {
   let grid = { lo: JAPT_CONFIG.dayStart - GRID_MARGIN_H, px: GRID_PX_PER_H };
 
   // What every tab gets from the window, once, in start().
-  let render, done, setErr, awaiting, askConfirm, setConfirm, getConfirm, CONFIRM, sectionHead;
+  let render, done, setErr, showErr, awaiting, askConfirm, setConfirm, getConfirm, CONFIRM, sectionHead;
   function start(shell) {
-    ({ render, done, setErr, awaiting, askConfirm, setConfirm, getConfirm, CONFIRM, sectionHead } = shell);
+    ({ render, done, setErr, showErr, awaiting, askConfirm, setConfirm, getConfirm, CONFIRM, sectionHead } = shell);
   }
   // A new window starts with nothing selected.
   function reset() { selBlock = null; copyTo = []; }
@@ -311,8 +311,11 @@ const ManageBlocks = (() => {
 
   /* ---------- changes ---------- */
 
+  // Not saved: no redraw, so what was typed stays.
   async function saveBlock(id, fields) {
-    selBlock = await UI.act(() => Store.reviseBlock(id, fields)) || id;
+    const savedAs = await UI.act(() => Store.reviseBlock(id, fields));
+    if (savedAs === null) return;
+    selBlock = savedAs;
     done();
   }
   // The start moves the whole block, the end changes its length.
@@ -329,7 +332,7 @@ const ManageBlocks = (() => {
     if (field.dataset.bl !== undefined) { await saveBlock(b.id, { label: field.value.trim() }); return; }
     const times = editedTimes(b, field);
     const bad = Store.blockProblems(b.id, times.start, times.end);
-    if (bad) { setErr(t(bad.time)); render(); return; }
+    if (bad) { showErr(t(bad.time)); return; }   // no redraw: the time you chose stays, to correct it
     await saveBlock(b.id, times);
   }
 

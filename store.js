@@ -276,7 +276,8 @@ const Store = (() => {
 
   /* ---------- tasks ---------- */
 
-  async function createTask({ title, note = '', goalId = null, who = [], deadline = null, repeat = null, stage = STAGE.OPEN }) {
+  async function createTask(fields) {
+    const { title, note = '', goalId = null, who = [], deadline = null, repeat = null, stage = STAGE.OPEN } = fields;
     refuse(taskProblems({ title, goalId }, stage));
     const row = taskRow({ title, note, goalId, stage, deadline, repeat });
     return run({ ops: [{ op: 'insert', table: 'tasks', row }, ...whoOps(row.id, who)] });
@@ -284,9 +285,11 @@ const Store = (() => {
   async function updateTask(id, { title, note, goalId, who, deadline, repeat }) {
     const k = task(id);
     refuse(taskProblems({ title, goalId }, k.stage));
-    const ops = [upd('tasks', id, { title, note, goalId, deadline, repeat: deadline ? repeat : null }), ...whoOps(id, who)];
+    const fields = { title, note, goalId, deadline, repeat: deadline ? repeat : null };
+    const ops = [upd('tasks', id, fields), ...whoOps(id, who)];
     // A task moved into an achieved goal reopens that goal.
-    if (goalId !== k.goalId && goal(goalId) && goal(goalId).achievedOn) ops.push(upd('goals', goalId, { achievedOn: null }));
+    const newGoal = goalId !== k.goalId && goal(goalId);
+    if (newGoal && newGoal.achievedOn) ops.push(upd('goals', goalId, { achievedOn: null }));
     return run({ ops });
   }
   const setDone = (id, on) => run(doneOps(task(id), on));
@@ -327,7 +330,8 @@ const Store = (() => {
   async function plan(taskId, to, { from = null, fromPeriod = null, mark = null } = {}) {
     const k = task(taskId), I = idx(), ops = [];
     const posFor = () => {
-      const others = I.tasksIn(to).filter(x => x !== taskId).map(id => ({ id, position: I.placement(to, id).position }));
+      const others = I.tasksIn(to).filter(x => x !== taskId)
+        .map(id => ({ id, position: I.placement(to, id).position }));
       return M.positionAt(others, mark ? mark.id : null, mark ? mark.after : true);
     };
     if (M.samePlace(from, to)) {   // the same block or period: only the order changes
@@ -381,7 +385,8 @@ const Store = (() => {
   // One self-contained save that may safely be sent twice: the queue for adding without a
   // connection will sit here (docs/design.md, Inbox; Possible future).
   async function addInboxTask({ title, note = '', goalId = null, who = [], deadline = null, repeat = null }) {
-    const row = taskRow({ title, note, goalId: goalId && goal(goalId) ? goalId : null, stage: STAGE.INBOX, deadline, repeat });
+    const knownGoal = goalId && goal(goalId) ? goalId : null;
+    const row = taskRow({ title, note, goalId: knownGoal, stage: STAGE.INBOX, deadline, repeat });
     const insert = { op: 'insert', table: 'tasks', row };
     const ops = [insert, ...peopleOps(row.id, who)].map(o => ({ ...o, ifNew: true }));
     return { id: row.id, ...(await run({ ops })) };
@@ -483,7 +488,9 @@ const Store = (() => {
   }
   // Taken out from today: tasks planned there from today leave the agenda; the past stays.
   function removeBlockOps(b) {
-    const ops = raw.block_placements.filter(p => p.blockId === b.id && p.date >= td()).map(p => del('block_placements', p.id));
+    const ops = raw.block_placements
+      .filter(p => p.blockId === b.id && p.date >= td())
+      .map(p => del('block_placements', p.id));
     const madeToday = b.validFrom && b.validFrom >= td();
     ops.push(madeToday ? del('work_blocks', b.id) : upd('work_blocks', b.id, { validTo: M.addDays(td(), -1) }));
     return ops;
@@ -546,7 +553,8 @@ const Store = (() => {
     if (!on) {
       const onlyInPeriod = k => !idx().of(k.id).blocks.length && idx().of(k.id).periods.length;
       const back = tasks().filter(k => !k.doneOn && onlyInPeriod(k)).length;
-      await apply([...raw.period_placements.map(p => del('period_placements', p.id)), settingOp('periodActive', false)]);
+      const placements = raw.period_placements.map(p => del('period_placements', p.id));
+      await apply([...placements, settingOp('periodActive', false)]);
       return back;
     }
     await apply([settingOp('periodActive', true), ...periodCleanOps(segments())]);
@@ -565,7 +573,8 @@ const Store = (() => {
   // A new person gets a colour nobody has yet (model.js, colours of people).
   function addMember(name) {
     refuse(memberProblems(null, name));
-    return apply([ins('members', { name: name.trim(), color: M.freshColour(members()), allowed: true, removedAt: null })]);
+    const color = M.freshColour(members());
+    return apply([ins('members', { name: name.trim(), color, allowed: true, removedAt: null })]);
   }
   function updateMember(id, fields) {
     if (fields.name !== undefined) {
@@ -591,7 +600,9 @@ const Store = (() => {
     const back = new Set(rows.map(x => x.r.id)), ops = [];
     for (const { t, r } of rows) {
       const f = { deletedAt: null, deleteGroup: null };
-      if (t === 'tasks' && r.goalId && !goal(r.goalId) && !back.has(r.goalId)) Object.assign(f, { goalId: null, stage: STAGE.INBOX });
+      if (t === 'tasks' && r.goalId && !goal(r.goalId) && !back.has(r.goalId)) {
+        Object.assign(f, { goalId: null, stage: STAGE.INBOX });
+      }
       if (t === 'goals' && r.clientId && !client(r.clientId) && !back.has(r.clientId)) {
         const c = bin.clients.find(x => x.id === r.clientId);
         if (c) ops.push({ op: 'update', table: 'clients', id: c.id, fields: { deletedAt: null, deleteGroup: null } });

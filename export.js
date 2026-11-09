@@ -19,7 +19,9 @@ const Export = (() => {
   }
   async function backup() {
     const data = await DataService.exportAll();
-    download(`japt-backup-${M.today()}.json`, { app: 'JAPT', appVersion: APP_VERSION, schemaVersion: SCHEMA_VERSION, exportedAt: new Date().toISOString(), data });
+    download(`japt-backup-${M.today()}.json`, {
+      app: 'JAPT', appVersion: APP_VERSION, schemaVersion: SCHEMA_VERSION, exportedAt: new Date().toISOString(), data
+    });
     try { localStorage.setItem('japt_last_backup', new Date().toISOString()); } catch (e) { /* not stored */ }
   }
   function analysis() {
@@ -38,12 +40,23 @@ const Export = (() => {
       goal: g.name, client: (Store.client(g.clientId) || { name: t('client.intern') }).name, note: g.note || '',
       achievedOn: g.achievedOn, createdAt: g.createdAt, tasks: Store.tasks().filter(k => k.goalId === g.id).map(taskOut)
     }));
-    const blocks = Store.blocks().map(b => ({ day: UI.wdLong(b.day), from: M.hhmm(b.start), to: M.hhmm(b.end), name: b.label || '', validFrom: b.validFrom, validTo: b.validTo }));
+    const blocks = Store.blocks().map(b => ({
+      day: UI.wdLong(b.day), from: M.hhmm(b.start), to: M.hhmm(b.end),
+      name: b.label || '', validFrom: b.validFrom, validTo: b.validTo
+    }));
+    const workPeriod = s => ({ from: s.from, length: s.length, unit: s.unit === 'm' ? 'months' : 'days' });
     download(`japt-analyse-${M.today()}.json`, {
-      about: 'JAPT (Just A Planning Tool): goals per client with their tasks, where each task was planned, and the team\'s work blocks. Labels are in Dutch.',
-      exportedAt: new Date().toISOString(), today: M.today(), firstDayOfWeek: UI.wdLong(Store.setting('weekStart')), deadlineReminderDays: Store.setting('deadlineDays'),
-      workPeriods: Store.periodActive() ? Store.segments().map(s => ({ from: s.from, length: s.length, unit: s.unit === 'm' ? 'months' : 'days' })) : null,
-      goals, tasksWithoutGoal: Store.tasks().filter(k => !Store.goal(k.goalId)).map(taskOut), inbox: Store.inbox().map(taskOut), workBlocks: blocks
+      about: 'JAPT (Just A Planning Tool): goals per client with their tasks, where each task was planned, '
+        + 'and the team\'s work blocks. Labels are in Dutch.',
+      exportedAt: new Date().toISOString(),
+      today: M.today(),
+      firstDayOfWeek: UI.wdLong(Store.setting('weekStart')),
+      deadlineReminderDays: Store.setting('deadlineDays'),
+      workPeriods: Store.periodActive() ? Store.segments().map(workPeriod) : null,
+      goals,
+      tasksWithoutGoal: Store.tasks().filter(k => !Store.goal(k.goalId)).map(taskOut),
+      inbox: Store.inbox().map(taskOut),
+      workBlocks: blocks
     });
   }
   return { backup, analysis };

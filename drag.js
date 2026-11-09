@@ -28,8 +28,12 @@ const Drag = (() => {
   const onStart = f => { onStarts.push(f); };
   const onEnd = f => { onEnds.push(f); };
 
-  function clearMarks() { document.querySelectorAll('.ins-before,.ins-after').forEach(x => x.classList.remove('ins-before', 'ins-after')); }
-  function clearOver(keep) { document.querySelectorAll('.over').forEach(x => { if (x !== keep) x.classList.remove('over'); }); }
+  function clearMarks() {
+    document.querySelectorAll('.ins-before,.ins-after').forEach(x => x.classList.remove('ins-before', 'ins-after'));
+  }
+  function clearOver(keep) {
+    document.querySelectorAll('.over').forEach(x => { if (x !== keep) x.classList.remove('over'); });
+  }
   function leave() { if (active && active.leave) active.leave(); active = null; clearMarks(); clearOver(null); }
 
   function end() {
@@ -53,7 +57,11 @@ const Drag = (() => {
     onStarts.forEach(f => f(cur));
     e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', cur.task);
     // styled one moment later, so the browser's drag image is the card as it was
-    setTimeout(() => { if (!cur) return; el.classList.add('dragging'); document.body.classList.add('dragging-any'); }, 0);
+    setTimeout(() => {
+      if (!cur) return;
+      el.classList.add('dragging');
+      document.body.classList.add('dragging-any');
+    }, 0);
   });
   document.addEventListener('dragend', end);
 

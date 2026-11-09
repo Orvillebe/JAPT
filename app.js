@@ -14,7 +14,8 @@
  *   data-local.js        - storage in this browser (testing)
  *   data-service.js      - picks the data layer (Supabase on the live address: next build step)
  *   store.js             - data in memory, every action as one save with its undo
- *   ui.js                - shared pieces: view memory, cards, windows, Escape, pickers, toast, figures
+ *   ui.js                - shared pieces: view memory, cards, windows, Escape, pickers, toast
+ *   figures.js           - the small figures that sometimes walk by when a task is checked off
  *   drag.js              - dragging a task: one handler, drop zones per screen
  *   agenda.js            - meetings from the agenda link
  *   calendar.js          - Taken page, right: day, week, period and list views, dragging
@@ -35,7 +36,9 @@ const App = (() => {
   const THEME_KEY = 'japt_theme';
   const theme = () => { try { return localStorage.getItem(THEME_KEY) || ''; } catch (e) { return ''; } };
   function setTheme(v) {
-    try { if (v) localStorage.setItem(THEME_KEY, v); else localStorage.removeItem(THEME_KEY); } catch (e) { /* only this session */ }
+    try {
+      if (v) localStorage.setItem(THEME_KEY, v); else localStorage.removeItem(THEME_KEY);
+    } catch (e) { /* only this session */ }
     if (v) document.documentElement.dataset.theme = v; else delete document.documentElement.dataset.theme;
   }
 
@@ -43,7 +46,8 @@ const App = (() => {
 
   // No sidebar on Doelen, Inbox and the list view.
   function syncSide() {
-    const list = View.page === 'tasks' && View.mode === 'list', noSide = View.page !== 'tasks' || View.sbHidden || list;
+    const list = View.page === 'tasks' && View.mode === UI.MODE.LIST;
+    const noSide = View.page !== 'tasks' || View.sbHidden || list;
     $('sidebar').hidden = noSide;
     document.querySelector('.app').classList.toggle('nosb', noSide);
     $('btnShowSide').hidden = !View.sbHidden || list || View.page !== 'tasks';
@@ -73,7 +77,11 @@ const App = (() => {
   function renderWhenFree() { if (Drag.current()) afterDrag = true; else render(); }
   Drag.onEnd(() => { if (afterDrag) { afterDrag = false; setTimeout(render, 0); } });
   // Saves change memory; draw once afterwards, not once per change.
-  function queueRender() { if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; render(); }); }
+  function queueRender() {
+    if (renderQueued) return;
+    renderQueued = true;
+    requestAnimationFrame(() => { renderQueued = false; render(); });
+  }
 
   /* ---------- starting ---------- */
 
@@ -83,7 +91,8 @@ const App = (() => {
     dbVersion = await DataService.schemaVersion();
     if (dbVersion === SCHEMA_VERSION) return true;
     $('loading').hidden = true; $('main').hidden = true;
-    $('versionText').textContent = dbVersion < SCHEMA_VERSION ? t('version.db_older', { db: dbVersion, app: SCHEMA_VERSION }) : t('version.app_older', { db: dbVersion, app: SCHEMA_VERSION });
+    const key = dbVersion < SCHEMA_VERSION ? 'version.db_older' : 'version.app_older';
+    $('versionText').textContent = t(key, { db: dbVersion, app: SCHEMA_VERSION });
     $('versionReload').hidden = dbVersion < SCHEMA_VERSION;
     $('versionScreen').hidden = false;
     return false;
@@ -107,10 +116,13 @@ const App = (() => {
       Calendar.init(); Tasks.init(); Goals.init(); Inbox.init(); Manage.init();
       UI.initFilters(render); UI.initGoalPicker();
       Store.onChange(queueRender);
-      document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => { show(b.dataset.view); if (View.page === 'inbox' && View.ibTab === 'add') $('ibIn').focus(); }));
+      document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
+        show(b.dataset.view);
+        if (View.page === 'inbox' && View.ibTab === 'add') $('ibIn').focus();
+      }));
     }
     // On a phone the Inbox opens, and Taken shows the list; on a laptop the calendar stays (as the mockup).
-    if (UI.PHONE()) { View.page = 'inbox'; if (View.mode !== 'day') View.mode = 'list'; }
+    if (UI.PHONE()) { View.page = 'inbox'; if (View.mode !== UI.MODE.DAY) View.mode = UI.MODE.LIST; }
     if (location.hash === '#inbox') View.page = 'inbox';   // a bookmark for on the way
     show(View.page);
   }
@@ -132,7 +144,9 @@ const App = (() => {
     document.title = t('app.title');
     $('localNote').hidden = DataService.needsLogin;
     $('versionReload').onclick = () => location.reload();
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reloadIfStale(true); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reloadIfStale(true);
+    });
     await start();
   }
 

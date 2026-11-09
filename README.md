@@ -28,7 +28,7 @@ node tests/store.test.js
 node tests/release.test.js
 ```
 
-The first tests the rules (dates, blocks, work periods, lists, deadlines, repeats, order, filters). The second tests saving on the local data layer: all or nothing, undo, the check on changes by someone else, and the rules that need more than one row. The third checks that every file in `index.html` carries the app version, and that the escape test has a step for every calendar view and Beheer tab.
+The first tests the rules (dates, blocks, work periods, lists, deadlines, repeats, order, filters). The second tests saving on the local data layer: all or nothing, undo, the check on changes by someone else, and the rules that need more than one row. The third checks that every file in `index.html` carries the app version, that no line of code is over 140 characters, and that the escape test has a step for every calendar view and Beheer tab.
 
 **Escape test, in the browser:** open `http://localhost:8766/tests/escape.html` and click **Test starten**. It fills every text people can type with a piece of HTML, opens every screen, window, picker and tab (wide and phone-sized), and fails when that text ever becomes real HTML in the page instead of text. That would let a task title run as code for everyone who sees it. Your local data is put aside and put back. Run it before every release; a new screen or window needs a new step in `STEPS`.
 
@@ -41,9 +41,11 @@ One file per task; each file starts with what it is responsible for.
 | `config.js`, `version.js` | Settings that change rarely; app and database version |
 | `i18n/nl.js`, `i18n/i18n.js` | All interface text, by key |
 | `model.js` | The rules as pure functions, without DOM or storage |
+| `tables.js` | The names of the database tables, for the Store and every data layer |
 | `data-local.js`, `data-service.js` | Storage in this browser; picking the data layer |
 | `store.js` | Data in memory; every action as one save with its undo |
-| `ui.js` | Shared pieces: cards, windows, the Escape key, pickers, toast, figures |
+| `ui.js` | Shared pieces: cards, windows, the Escape key, pickers, toast |
+| `figures.js` | The small figures that sometimes walk by when a task is checked off |
 | `drag.js` | Dragging a task: one handler for the page, each screen registers its drop zones |
 | `calendar.js`, `tasks.js` | Taken page: calendar views; the task lists and form |
 | `goals.js`, `inbox.js`, `manage.js` | Doelen, Inbox, Beheer |

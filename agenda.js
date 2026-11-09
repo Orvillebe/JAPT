@@ -28,10 +28,13 @@ const Agenda = (() => {
   function ensure(days) {
     if (!days.length) return;
     const url = Store.calendarUrl(), from = days[0], to = days[days.length - 1];
-    const fresh = source && (source.local ? !url : source.url === url && Date.now() - source.at < JAPT_CONFIG.agendaMinutes * 60000);
+    const notOld = () => Date.now() - source.at < JAPT_CONFIG.agendaMinutes * 60000;
+    const fresh = source && (source.local ? !url : source.url === url && notOld());
     if (fresh) { if (!win || from < win.from || to > win.to) expand(from, to); return; }
     if (loading) return;
-    loading = (url ? readLink(url) : readLocal()).then(() => { expand(from, to); App.renderWhenFree(); }).finally(() => { loading = null; });
+    loading = (url ? readLink(url) : readLocal())
+      .then(() => { expand(from, to); App.renderWhenFree(); })
+      .finally(() => { loading = null; });
   }
 
   async function readLocal() {
@@ -47,9 +50,15 @@ const Agenda = (() => {
       const comp = new ICAL.Component(ICAL.parse(await res.text()));
       comp.getAllSubcomponents('vtimezone').forEach(tz => ICAL.TimezoneService.register(tz));
       const vevents = comp.getAllSubcomponents('vevent'), events = [], exceptions = [];
-      vevents.forEach(v => { const ev = new ICAL.Event(v); (ev.isRecurrenceException() ? exceptions : events).push(ev); });
+      vevents.forEach(v => {
+        const ev = new ICAL.Event(v);
+        (ev.isRecurrenceException() ? exceptions : events).push(ev);
+      });
       // a moved or cancelled single meeting of a series belongs to that series
-      exceptions.forEach(x => { const s = events.find(e => e.uid === x.uid); if (s) s.relateException(x); else events.push(x); });
+      exceptions.forEach(x => {
+        const s = events.find(e => e.uid === x.uid);
+        if (s) s.relateException(x); else events.push(x);
+      });
       source = { url, at: Date.now(), events }; failedFlag = false;
     } catch (e) {
       console.warn('Agenda not reachable', e);
@@ -70,7 +79,8 @@ const Agenda = (() => {
   }
   const toMeeting = (title, s, e) => {
     const date = M.localDs(s), end = M.localDs(e) === date ? e.getHours() * 60 + e.getMinutes() : 24 * 60;
-    return { date, start: s.getHours() * 60 + s.getMinutes(), end: Math.max(end, s.getHours() * 60 + s.getMinutes() + 15), title: title || '' };
+    const start = s.getHours() * 60 + s.getMinutes();
+    return { date, start, end: Math.max(end, start + 15), title: title || '' };
   };
   function occurrences(ev, w) {
     if (ev.startDate.isDate) return [];   // whole-day items stay out
@@ -84,7 +94,8 @@ const Agenda = (() => {
     for (let next = it.next(), n = 0; next && n < 5000; next = it.next(), n++) {
       const d = ev.getOccurrenceDetails(next), s = d.startDate.toJSDate();
       if (s >= hi) break;
-      if (s >= lo && d.item.getFirstPropertyValue('status') !== 'CANCELLED') out.push(toMeeting(d.item.summary, s, d.endDate.toJSDate()));
+      const cancelled = d.item.getFirstPropertyValue('status') === 'CANCELLED';
+      if (s >= lo && !cancelled) out.push(toMeeting(d.item.summary, s, d.endDate.toJSDate()));
     }
     return out;
   }

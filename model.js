@@ -32,7 +32,8 @@ function createModel(CFG) {
     return toDs(new Date(Date.UTC(y, m, Math.min(d.getUTCDate(), daysIn(y, m)))));
   }
   const weekday = ds => parseD(ds).getUTCDay();     // 0 = Sunday ... 6 = Saturday
-  const localDs = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const pad2 = n => String(n).padStart(2, '0');
+  const localDs = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
   let fixedToday = null;
   const today = () => fixedToday || localDs(new Date());
@@ -60,7 +61,8 @@ function createModel(CFG) {
 
   // A block is a weekly pattern {id, day, start, end, label, validFrom, validTo}. A change makes a new
   // block from today on, so past weeks keep the blocks they had (docs/design.md, Work blocks).
-  const blockOnDate = (b, ds) => b.day === weekday(ds) && (!b.validFrom || b.validFrom <= ds) && (!b.validTo || b.validTo >= ds);
+  const blockOnDate = (b, ds) =>
+    b.day === weekday(ds) && (!b.validFrom || b.validFrom <= ds) && (!b.validTo || b.validTo >= ds);
   const blocksOn = (blocks, ds) => blocks.filter(b => blockOnDate(b, ds)).sort((a, b) => a.start - b.start);
   const currentBlocks = (blocks, day) => blocks.filter(b => !b.validTo && (day === undefined || b.day === day));
 
@@ -111,7 +113,8 @@ function createModel(CFG) {
       let st, nx;
       if (sg.unit === 'm') {
         const d = parseD(ds), f = parseD(sg.from);
-        let k = Math.max(0, Math.floor(((d.getUTCFullYear() - f.getUTCFullYear()) * 12 + d.getUTCMonth() - f.getUTCMonth()) / sg.length));
+        const monthsApart = (d.getUTCFullYear() - f.getUTCFullYear()) * 12 + d.getUTCMonth() - f.getUTCMonth();
+        let k = Math.max(0, Math.floor(monthsApart / sg.length));
         while (k > 0 && addMonths(sg.from, k * sg.length) > ds) k--;
         while (addMonths(sg.from, (k + 1) * sg.length) <= ds) k++;
         st = addMonths(sg.from, k * sg.length); nx = addMonths(sg.from, (k + 1) * sg.length);
@@ -241,7 +244,11 @@ function createModel(CFG) {
   /* ---------- repeats ---------- */
 
   // A repeat is 'n:u' with u = d (days), w (weeks) or m (months), for example '3:m'.
-  const parseRepeat = r => { if (!r) return null; const [n, u] = String(r).split(':'); return +n > 0 && 'dwm'.includes(u) && u ? { n: +n, u } : null; };
+  const parseRepeat = r => {
+    if (!r) return null;
+    const [n, u] = String(r).split(':');
+    return +n > 0 && u && 'dwm'.includes(u) ? { n: +n, u } : null;
+  };
   // The first deadline after today, counted from the previous one: a task done far too late
   // doesn't leave a pile of overdue repeats.
   function nextDeadline(deadline, repeat, td = today()) {
@@ -305,14 +312,17 @@ function createModel(CFG) {
   })[0]);
   const goalHue = g => (g && g.hue != null ? nearestHue(g.hue) : GREY);
   // A new goal gets the hue that is used least.
-  const freshHue = goals => GOAL_HUES.map(h => ({ h, n: goals.filter(g => goalHue(g) === h).length })).sort((a, b) => a.n - b.n)[0].h;
+  const freshHue = goals => GOAL_HUES
+    .map(h => ({ h, n: goals.filter(g => goalHue(g) === h).length }))
+    .sort((a, b) => a.n - b.n)[0].h;
 
   /* ---------- colours of people ---------- */
 
   // Distinct, readable on white and dark; a new person gets the first one nobody has yet (it can be
   // changed in Beheer). With more people than colours, they are reused in order.
   const MEMBER_COLOURS = ['#cf6a52', '#4f80bd', '#4f9d6b', '#b07cc6', '#d1a03a', '#3fa0a8', '#c25b8a', '#7a7f8c'];
-  const freshColour = members => MEMBER_COLOURS.find(c => !members.some(u => u.color === c)) || MEMBER_COLOURS[members.length % MEMBER_COLOURS.length];
+  const freshColour = members =>
+    MEMBER_COLOURS.find(c => !members.some(u => u.color === c)) || MEMBER_COLOURS[members.length % MEMBER_COLOURS.length];
 
   return {
     parseD, toDs, addDays, addMonths, daysBetween, daysIn, weekday, today, setToday, localDs,

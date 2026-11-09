@@ -27,7 +27,8 @@ function createLocalData() {
   const LOCAL_MIGRATIONS = {
     1: db => { LOCAL_TABLES.forEach(t => { db[t] = db[t] || []; }); },
     2: () => {},   // migration 002 only adds a check to the real database
-    3: () => {}    // migration 003 adds an optional field
+    3: () => {},   // migration 003 adds an optional field
+    4: () => {}    // migration 004 only hardens the real database
   };
 
   function upgrade(db) {
@@ -125,6 +126,10 @@ function createLocalData() {
     // Remove for good what has been in the Bin longer than the bin period.
     async purgeBin(beforeIso) {
       const db = read(), old = r => r.deletedAt && r.deletedAt < beforeIso;
+      // A task alive under a deleted goal goes to the Inbox (the same as purge_bin in migrations/004).
+      const binnedGoals = new Set(db.goals.filter(g => g.deletedAt).map(g => g.id));
+      db.tasks.filter(k => !k.deletedAt && !k.doneOn && binnedGoals.has(k.goalId))
+        .forEach(k => { k.goalId = null; k.stage = 'inbox'; });
       const gone = new Set(db.tasks.filter(old).map(k => k.id));
       for (const t of BINNED_TABLES) db[t] = db[t].filter(r => !old(r));
       for (const t of TASK_TABLES) db[t] = db[t].filter(r => !gone.has(r.taskId));

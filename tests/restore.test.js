@@ -6,7 +6,7 @@
 const assert = require('assert');
 const buildRestoreSql = require('../tools/restore.js');
 
-const VERSION = 3;
+const VERSION = 4;
 const noUpgrade = b => b.data;
 const LOGIN = '4ba0d456-5b56-4b08-9518-c47649c69547';
 const AT = '2026-11-09T10:00:00.123456+00:00';

@@ -126,10 +126,8 @@ function createSupabaseData() {
     },
 
     async purgeBin(beforeIso) {
-      for (const table of BINNED_TABLES) {
-        const { error } = await sb.from(table).delete().eq('team_id', teamId).lt('deleted_at', beforeIso);
-        check(error);
-      }
+      const { error } = await sb.rpc('purge_bin', { p_team: teamId, p_before: beforeIso });
+      check(error);
     },
 
     async exportAll() {

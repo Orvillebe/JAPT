@@ -605,6 +605,17 @@ test('what stayed in the Bin too long is gone at the next start', async () => {
   eq(await stored('task_members'), []);
 });
 
+test('a task alive under a deleted goal goes to the Inbox when the Bin is emptied', async () => {
+  const at = new Date(Date.now() - 2 * 864e5).toISOString();
+  const { DS, stored } = await app({
+    goals: [row({ id: 'g1', name: 'Weg', note: '', clientId: null, hue: 8, achievedOn: null, deletedAt: at, deleteGroup: 'x' })],
+    tasks: [task('a')]
+  });
+  await DS.purgeBin(new Date(Date.now() - 30 * 864e5).toISOString());
+  const k = (await stored('tasks'))[0];
+  eq([k.stage, k.goalId], ['inbox', null]);
+});
+
 /* ---------- work blocks ---------- */
 
 test('changing a block starts a new one today; the past keeps the old one', async () => {

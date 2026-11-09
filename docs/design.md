@@ -257,6 +257,8 @@ Decided on 2026-11-09: one shared database and one version of the software for e
 
 **Proven by a test:** two test users in two teams. On every table and function, one tries to read, add, change and delete the other's data, and one attempt that works fails the test. A second check fails when a table has no Row Level Security. Both must first be seen to fail on a rule that was removed on purpose. They run against a real Supabase database, because the local version has no such rules.
 
+**Only what the app would send anyway gets through:** colours, ids and delete groups have a fixed form in the database, because they end up in a colleague's page; who made or changed something and when is filled in by the database for every logged-in user; emptying the Bin is one function, which first moves a task alive under a deleted goal to the Inbox.
+
 **Not built now** (see *Possible future*): signing up, creating a team, inviting from the app, choosing between teams, paying.
 
 ### Filters

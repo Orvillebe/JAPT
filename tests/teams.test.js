@@ -37,6 +37,7 @@ async function call(token, method, url, body, headers = {}) {
 async function login(email, password) {
   const r = await call(null, 'POST', '/auth/v1/token?grant_type=password', { email, password });
   assert.ok(r.ok, `logging in ${email} failed: ${JSON.stringify(r.data)}`);
+  loginIds[r.data.access_token] = r.data.user.id;
   return r.data.access_token;
 }
 const rpc = (token, fn, args) => call(token, 'POST', '/rest/v1/rpc/' + fn, args);
@@ -61,6 +62,7 @@ function rowsFor(team) {
 const seedOps = team => rowsFor(team).map(([table, row]) => ({ op: 'insert', table, row, if_new: true }));
 const clearOps = team => rowsFor(team).reverse().map(([table, row]) => ({ op: 'remove', table, id: row.id }));
 
+const loginIds = {};
 let passed = 0;
 const failures = [];
 function check(name, ok, detail) {
@@ -145,6 +147,47 @@ async function attack(a, b) {
   check('members: nothing without logging in', refused(r) || empty(r), r);
   r = await rpc(null, 'apply_batch', { p_team: TEAM_B, p_ops: [] });
   check('The save function needs a login', refused(r), r);
+
+  // What ends up in a colleague's page has a fixed form.
+  const BAD = '"><img src=x>';
+  r = await call(a, 'PATCH', `/rest/v1/members?team_id=eq.${TEAM_A}&id=eq.${TEAM_A}-me`, { color: `red;${BAD}` }, RETURN_ROWS);
+  check('A colour must be a colour', refused(r), r);
+  r = await batch(a, TEAM_A, [{ op: 'insert', table: 'clients', row: { id: BAD, name: 'x' } }]);
+  check('An id can\'t hold HTML', refused(r), r);
+  r = await call(a, 'POST', '/rest/v1/clients', { team_id: TEAM_A, id: BAD, name: 'x' }, RETURN_ROWS);
+  check('An id can\'t hold HTML, also not directly', refused(r), r);
+  r = await batch(a, TEAM_A, [{ op: 'update', table: 'clients', id: `${TEAM_A}-client`, fields: { delete_group: BAD } }]);
+  check('A delete group can\'t hold HTML', refused(r), r);
+
+  // Who and when can't be made up.
+  const OTHER = '00000000-0000-0000-0000-000000000000', LONG_AGO = '2000-01-01T00:00:00+00:00', me = loginIds[a];
+  r = await batch(a, TEAM_A, [{ op: 'insert', table: 'clients',
+    row: { id: `${TEAM_A}-who1`, name: 'who1', created_by: OTHER, created_at: LONG_AGO, changed_by: OTHER } }]);
+  check('Who made it can\'t be made up through the save function',
+    r.ok && r.data[0].created_by === me && r.data[0].changed_by === me && !r.data[0].created_at.startsWith('2000'), r);
+  r = await call(a, 'POST', '/rest/v1/clients',
+    { team_id: TEAM_A, id: `${TEAM_A}-who2`, name: 'who2', created_by: OTHER, created_at: LONG_AGO }, RETURN_ROWS);
+  check('Who made it can\'t be made up directly', r.ok && r.data[0].created_by === me && !r.data[0].created_at.startsWith('2000'), r);
+  r = await call(a, 'PATCH', `/rest/v1/clients?team_id=eq.${TEAM_A}&id=eq.${TEAM_A}-who2`, { created_by: OTHER, created_at: LONG_AGO }, RETURN_ROWS);
+  check('Who made it can\'t be changed afterwards', r.ok && r.data[0].created_by === me && !r.data[0].created_at.startsWith('2000'), r);
+  await batch(a, TEAM_A, [`${TEAM_A}-who1`, `${TEAM_A}-who2`].map(id => ({ op: 'remove', table: 'clients', id })));
+
+  // A task alive under a deleted goal doesn't block emptying the Bin.
+  const GONE = '2000-01-01T00:00:00+00:00', goal = `${TEAM_A}-orphan-goal`, orphan = `${TEAM_A}-orphan`;
+  r = await batch(a, TEAM_A, [
+    { op: 'insert', table: 'goals', row: { id: goal, name: 'Weg', deleted_at: GONE, delete_group: 'x' } },
+    { op: 'insert', table: 'tasks', row: { id: orphan, title: 'Levend', stage: 'open', goal_id: goal } }
+  ]);
+  check('Setting up the orphan', r.ok, r);
+  r = await rpc(a, 'purge_bin', { p_team: TEAM_A, p_before: '2001-01-01T00:00:00+00:00' });
+  check('Emptying the Bin goes through', r.ok, r);
+  r = await call(a, 'GET', `/rest/v1/tasks?team_id=eq.${TEAM_A}&id=eq.${orphan}`);
+  check('The orphan is in the Inbox, without its goal', r.ok && r.data.length === 1 && r.data[0].stage === 'inbox' && r.data[0].goal_id === null, r.data);
+  r = await call(a, 'GET', `/rest/v1/goals?team_id=eq.${TEAM_A}&id=eq.${goal}`);
+  check('The goal is gone for good', empty(r), r.data);
+  r = await rpc(a, 'purge_bin', { p_team: TEAM_B, p_before: '2001-01-01T00:00:00+00:00' });
+  check('A can\'t empty the Bin of B', refused(r), r);
+  await batch(a, TEAM_A, [{ op: 'remove', table: 'tasks', id: orphan }]);
 
   // Every table protected.
   r = await rpc(a, 'tables_without_rls', {});

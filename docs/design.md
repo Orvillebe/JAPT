@@ -278,7 +278,8 @@ Decided on 2026-11-09: one shared database and one version of the software for e
 - Pure logic (which list, periods, repeats, block validity) lives in `model.js` without DOM or database, with tests.
 - Local storage first, as with JATL and JAFT. Supabase follows once the local version behaves like the mockup.
 - **Typed text stays text:** screens build HTML as text and pass everything people typed through `UI.esc()`. `tests/escape.html` proves it in a browser: every typed field is filled with HTML, every screen, window, picker and tab is opened (wide and phone-sized), and one real element made from typed text fails the test. It was checked to fail by removing `esc()` on purpose (in text and in an attribute). `tests/release.test.js` fails when a calendar view or Beheer tab has no step in it.
-- **Before every release:** `node tests/model.test.js`, `node tests/release.test.js`, and `tests/escape.html` in the browser.
+- **Saving is tested too:** `tests/store.test.js` runs the Store on the local data layer in node: all or nothing, undo, the `changed_at` check, and the rules that need more than one row.
+- **Before every release:** `node tests/model.test.js`, `node tests/store.test.js`, `node tests/release.test.js`, and `tests/escape.html` in the browser.
 
 ## 8. Possible future
 

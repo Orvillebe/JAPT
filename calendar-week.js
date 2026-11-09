@@ -146,10 +146,15 @@ const CalendarWeek = (() => {
     const titles = ids.map(id => (Store.task(id) || {}).title).filter(Boolean).join(', ');
     return `<div class="covered" title="${esc(titles)}">${UI.tn('cal.covered_tasks', ids.length)}</div>`;
   }
+  const MEETING_GAP_PX = 3;
   const SHORT_MINUTES = 45;   // shorter is just room for its times and one task, so both get smaller
   // head: the block's name and times, on its first piece only.
-  function blockPiece(place, from, to, firstHour, head, content, { noRoom = false, part = false } = {}) {
-    const position = `top:${topPx(from, firstHour)}px;height:${(to - from) / 60 * PX_PER_HOUR}px`;
+  function blockPiece(place, from, to, firstHour, head, content, { noRoom = false, part = false, block = null } = {}) {
+    // Next to a meeting a piece keeps the same small distance above and below.
+    const gapAbove = block && from > block.start ? MEETING_GAP_PX : 0;
+    const gapBelow = block && to < block.end ? MEETING_GAP_PX : 0;
+    const height = (to - from) / 60 * PX_PER_HOUR - gapAbove - gapBelow;
+    const position = `top:${topPx(from, firstHour) + gapAbove}px;height:${height}px`;
     const short = to - from < SHORT_MINUTES ? 'short' : '';
     return html`
       <div class="block ${short} ${head ? '' : 'nohead'} ${noRoom ? 'noroom' : ''}" ${noRoom ? 'data-noroom' : ''}
@@ -172,7 +177,7 @@ const CalendarWeek = (() => {
     const isPart = parts.length > 1 || parts[0].start !== block.start || parts[0].end !== block.end;
     return parts.map((part, i) => {
       const content = `<div class="list">${i === 0 ? chips || dropHere() : dropHere()}</div>`;
-      return blockPiece(place, part.start, part.end, firstHour, i === 0 ? head : '', content, { part: isPart });
+      return blockPiece(place, part.start, part.end, firstHour, i === 0 ? head : '', content, { part: isPart, block });
     }).join('');
   }
   function dayColumnHtml(day, firstHour, lastHour) {

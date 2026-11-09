@@ -41,6 +41,8 @@ const CalendarViews = (() => {
   //   cssClass      the class on #weekView; style.css shows and hides the parts of the page with it
   //   needsAgenda   whether meetings are fetched for its days
   //   swipes        whether a finger can move it to the previous or next one (phone)
+  //   swipesAtEnds  the browser itself scrolls between the columns in view (style.css); a finger only
+  //                 moves it on past the first or last column
   //   surface       the part of the page it draws in (SURFACES in calendar.js says with what)
   const VIEWS = {
     [MODE.DAY]: {
@@ -57,7 +59,7 @@ const CalendarViews = (() => {
     },
     [MODE.PERIOD]: {
       days: workDays, hidesWeekend: false, step: stepByPeriod,
-      cssClass: 'cymode', needsAgenda: false, swipes: false, surface: SURFACE.PERIOD
+      cssClass: 'cymode', needsAgenda: false, swipes: false, swipesAtEnds: true, surface: SURFACE.PERIOD
     },
     [MODE.LIST]: {
       days: workDays, hidesWeekend: false, step: stepByDays(DAYS_PER_WEEK),

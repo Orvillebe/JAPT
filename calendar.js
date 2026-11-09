@@ -246,6 +246,7 @@ const Calendar = (() => {
   /* ---------- swiping on a phone ---------- */
 
   // Day, Werkweek and Week follow your finger: left for the next day or week, right for the previous.
+  // Werkperiode does the same past the first or last period in view; between those the browser scrolls.
   // Past a quarter of the screen (or a fast swipe) it changes, otherwise it springs back.
   const SWIPE = {
     lockPx: 10,          // movement before deciding between swiping and scrolling
@@ -265,7 +266,7 @@ const Calendar = (() => {
 
   // Moves the day or week; without an opacity it goes back to the one from style.css.
   function slideWeek(x, animate, opacity) {
-    ['head', 'body'].map($).forEach(el => {
+    (currentView().swipesAtEnds ? ['cycleView'] : ['head', 'body']).map($).forEach(el => {
       el.style.transition = animate ? `transform ${SWIPE.ms}ms ease-out, opacity ${SWIPE.ms}ms ease-out` : 'none';
       el.style.transform = x ? `translateX(${x}px)` : '';
       el.style.opacity = opacity == null ? '' : opacity;
@@ -273,8 +274,15 @@ const Calendar = (() => {
   }
   function canSwipeFrom(e) {
     return e.touches.length === 1 && matchMedia('(pointer:coarse)').matches
-      && currentView().swipes && !e.target.closest(SWIPE_FREE_ZONES);
+      && (currentView().swipes || currentView().swipesAtEnds) && !e.target.closest(SWIPE_FREE_ZONES);
   }
+  // Where the periods in view were scrolled to when the finger came down; null for a view without columns.
+  function columnEnds() {
+    if (!currentView().swipesAtEnds) return null;
+    const { scrollLeft, clientWidth, scrollWidth } = $('cycleView');
+    return { first: scrollLeft <= 1, last: scrollLeft + clientWidth >= scrollWidth - 1 };
+  }
+  const swipeIsOurs = (dx, ends) => !ends || (dx < 0 ? ends.last : ends.first);
   function swipeChanges(dx, startedAt, width) {
     const distance = Math.abs(dx);
     const fast = distance / Math.max(1, Date.now() - startedAt) > SWIPE.fastPxPerMs;
@@ -296,7 +304,9 @@ const Calendar = (() => {
     let swipe = null;   // the touch in progress: where it started, and whether it is locked to a direction
     weekView.addEventListener('touchstart', e => {
       const touch = e.touches[0];
-      swipe = canSwipeFrom(e) ? { x: touch.clientX, y: touch.clientY, at: Date.now(), lock: null, dx: 0 } : null;
+      swipe = canSwipeFrom(e)
+        ? { x: touch.clientX, y: touch.clientY, at: Date.now(), lock: null, dx: 0, ends: columnEnds() }
+        : null;
     }, { passive: true });
     weekView.addEventListener('touchmove', e => {
       if (!swipe) return;
@@ -304,7 +314,7 @@ const Calendar = (() => {
       if (!swipe.lock && (Math.abs(dx) > SWIPE.lockPx || Math.abs(dy) > SWIPE.lockPx)) {
         swipe.lock = Math.abs(dx) > SWIPE.sideways * Math.abs(dy) ? LOCK_SIDEWAYS : LOCK_UPDOWN;
       }
-      if (swipe.lock !== LOCK_SIDEWAYS) return;
+      if (swipe.lock !== LOCK_SIDEWAYS || !swipeIsOurs(dx, swipe.ends)) return;
       swipe.dx = dx;
       const fade = 1 - Math.abs(dx) / (weekView.clientWidth * SWIPE.fadeOver);
       slideWeek(dx * SWIPE.follow, false, Math.max(SWIPE.fadeMin, fade));
@@ -313,6 +323,7 @@ const Calendar = (() => {
       if (!swipe || swipe.lock !== LOCK_SIDEWAYS) { swipe = null; return; }
       const { dx, at } = swipe;
       swipe = null;
+      if (!dx) return;   // the browser scrolled this one
       const button = $(dx < 0 ? 'calNext' : 'calPrev');
       if (button.disabled || !swipeChanges(dx, at, weekView.clientWidth)) { slideWeek(0, true); return; }
       slideToNeighbour(weekView, button, dx < 0 ? -1 : 1);

@@ -318,7 +318,7 @@ const NL = {
   'users.exists': 'Er bestaat al een gebruiker met deze naam.',
 
   'agenda.title': 'Agenda',
-  'agenda.hint': 'De deelbare link van de agenda van het team (kSuite). De meetings verschijnen in de kalender tussen de werkblokken. JAPT leest enkel, het schrijft nooit in de agenda.',
+  'agenda.hint': 'De deelbare link van de agenda van het team (kSuite). De meetings verschijnen in de kalender bovenop de werkblokken. JAPT leest enkel, het schrijft nooit in de agenda.',
   'agenda.secret': 'Wie deze link heeft, kan de hele agenda lezen. Alleen wie JAPT mag gebruiken ziet hem hier.',
   'agenda.saved': 'Agenda-link bewaard',
   'agenda.need_https': 'Een agenda-link begint met https://.',

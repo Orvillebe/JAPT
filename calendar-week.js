@@ -139,17 +139,6 @@ const CalendarWeek = (() => {
     const position = blocks.findIndex(b => b.key === key) + 1;
     return chip(k, place, { side: part(blocks.length, position) + unplanBtn(place, t('cal.out_of_block')) });
   }
-  const BLOCK_HEAD_PX = 26, BLOCK_FOOT_PX = 6;   // the block's own top line and bottom edge
-  const isWholeBlock = (parts, block) => parts.length === 1 && parts[0].start === block.start && parts[0].end === block.end;
-
-  // A list per free part, at its own height in the block. Every task starts in the first; fitBlocks spreads them.
-  function freePartLists(block, parts, chips) {
-    return parts.map((part, i) => {
-      const top = Math.max(BLOCK_HEAD_PX, (part.start - block.start) / 60 * PX_PER_HOUR);
-      const bottom = (part.end - block.start) / 60 * PX_PER_HOUR - BLOCK_FOOT_PX;
-      return `<div class="list" style="top:${top}px;height:${bottom - top}px">${i === 0 ? chips || dropHere() : ''}</div>`;
-    }).join('');
-  }
   // In the past a covered block keeps what was planned in it (from today on it goes back to the list); this
   // says so, because the meeting is in front of it.
   function coveredTasksHtml(ids) {
@@ -157,24 +146,28 @@ const CalendarWeek = (() => {
     const titles = ids.map(id => (Store.task(id) || {}).title).filter(Boolean).join(', ');
     return `<div class="covered" title="${esc(titles)}">${UI.tn('cal.covered_tasks', ids.length)}</div>`;
   }
+  function blockPiece(place, from, to, firstHour, label, content, noRoom = false) {
+    const position = `top:${topPx(from, firstHour)}px;height:${(to - from) / 60 * PX_PER_HOUR}px`;
+    return html`
+      <div class="block ${noRoom ? 'noroom' : ''}" ${noRoom ? 'data-noroom' : ''} data-place="${P(place)}" style="${position}">
+        <div class="bh">${label}<span>${UI.span(UI.fmt(from), UI.fmt(to))}</span></div>
+        ${content}
+      </div>`;
+  }
+  // A block with a meeting in it acts as separate blocks, one per free part. Every task starts in the first;
+  // fitBlocks spreads them.
   function blockHtml(day, block, firstHour, meetings) {
     const place = { date: day, blockId: block.id };
     const ids = Store.idx().tasksIn(place), chips = ids.map(id => blockChip(id, place)).join('');
-    const position = `top:${topPx(block.start, firstHour)}px;height:${heightPx(block)}px`;
     const label = block.label ? `<span>${esc(block.label)}</span>` : '';
-    const head = `<div class="bh">${label}<span>${UI.span(UI.fmt(block.start), UI.fmt(block.end))}</span></div>`;
     const parts = M.freeParts(block, meetings);
     if (!parts.length) {
-      return `<div class="block noroom" data-noroom data-place="${P(place)}" style="${position}">${head}${coveredTasksHtml(ids)}</div>`;
+      return blockPiece(place, block.start, block.end, firstHour, label, coveredTasksHtml(ids), true);
     }
-    if (!isWholeBlock(parts, block)) {
-      return `<div class="block split" data-place="${P(place)}" style="${position}">${head}${freePartLists(block, parts, chips)}</div>`;
-    }
-    return html`
-      <div class="block" data-place="${P(place)}" style="${position}">
-        ${head}
-        <div class="list">${chips || dropHere()}</div>
-      </div>`;
+    return parts.map((part, i) => {
+      const content = `<div class="list">${i === 0 ? chips || dropHere() : dropHere()}</div>`;
+      return blockPiece(place, part.start, part.end, firstHour, i === 0 ? label : '', content);
+    }).join('');
   }
   function dayColumnHtml(day, firstHour, lastHour) {
     const blocks = Store.blocksOn(day);
@@ -202,26 +195,37 @@ const CalendarWeek = (() => {
   }
   const ROUNDING_TOLERANCE_PX = 1;   // scrollHeight is rounded: one pixel over still fits
   // Blocks where the tasks don't fit get compact rows instead of a scrollbar.
-  // Tasks fill the free parts of a block from the top; what doesn't fit moves on to the next part, in order.
-  // The last part scrolls when there are more tasks than room.
-  function spreadOverLists(block, lists, overflows) {
-    if (lists.length < 2) return;
-    block.querySelectorAll('.chip').forEach(chip => lists[0].appendChild(chip));
+  const overflows = list => list.scrollHeight > list.clientHeight + ROUNDING_TOLERANCE_PX;
+
+  // Tasks fill the pieces of a block from the top; what doesn't fit moves on to the next piece, in order.
+  function spreadOverPieces(pieces) {
+    const lists = pieces.map(piece => piece.querySelector('.list'));
+    pieces.flatMap(piece => [...piece.querySelectorAll('.chip')]).forEach(chip => lists[0].appendChild(chip));
     lists.slice(0, -1).forEach((list, i) => {
-      while (overflows(list) && list.lastElementChild) lists[i + 1].prepend(list.lastElementChild);
+      while (overflows(list) && list.querySelector('.chip')) {
+        const next = lists[i + 1], empty = next.querySelector('.empty');
+        if (empty) empty.remove();
+        next.prepend(list.lastElementChild);
+      }
     });
   }
-
+  // More tasks than room: smaller cards first, each piece for itself.
+  function fitPiece(piece) {
+    const list = piece.querySelector('.list');
+    if (!list || !overflows(list)) return;
+    piece.classList.add('snug');
+    if (overflows(list)) { piece.classList.remove('snug'); piece.classList.add('tight'); }
+  }
   function fitBlocks() {
-    document.querySelectorAll('#body .block').forEach(block => {
-      block.classList.remove('tight', 'snug');
-      const lists = [...block.querySelectorAll('.list')];
-      if (!lists.length) return;
-      const overflows = list => list.scrollHeight > list.clientHeight + ROUNDING_TOLERANCE_PX;
-      const doesntFit = () => { spreadOverLists(block, lists, overflows); return lists.some(overflows); };
-      if (!doesntFit()) return;
-      block.classList.add('snug');
-      if (doesntFit()) { block.classList.remove('snug'); block.classList.add('tight'); spreadOverLists(block, lists, overflows); }
+    const byPlace = new Map();
+    document.querySelectorAll('#body .block').forEach(piece => {
+      piece.classList.remove('tight', 'snug');
+      if (!byPlace.has(piece.dataset.place)) byPlace.set(piece.dataset.place, []);
+      byPlace.get(piece.dataset.place).push(piece);
+    });
+    byPlace.forEach(pieces => {
+      if (pieces.length > 1) spreadOverPieces(pieces);
+      pieces.forEach(fitPiece);
     });
   }
 

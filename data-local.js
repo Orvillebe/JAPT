@@ -25,7 +25,8 @@ function createLocalData() {
   // The same steps as the files in migrations/, for data in this browser. Step n brings data from
   // version n - 1 to version n. Never change a step that has shipped; add a new one.
   const LOCAL_MIGRATIONS = {
-    1: db => { LOCAL_TABLES.forEach(t => { db[t] = db[t] || []; }); }
+    1: db => { LOCAL_TABLES.forEach(t => { db[t] = db[t] || []; }); },
+    2: () => {}   // migration 002 only adds a check to the real database
   };
 
   function upgrade(db) {

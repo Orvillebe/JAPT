@@ -28,7 +28,7 @@ How JAPT works and why: users and hosting, the data model, the rules, and how th
 
 - **Users:** a small agency team. Everyone in a team sees and changes everything of that team. No roles.
 - **Database:** its own Supabase project, EU region, free plan. Row Level Security on every table, self-registration off, users are invited, and every rule checks "logged in and on the access list of the team this row belongs to" (`members.allowed`, see *Teams*).
-- **Swappable data layer:** the app talks to one data layer (`data-service.js`). Local storage for testing, Supabase in production. Which one follows from the address: the addresses in `deployment.js` use the real database, your own computer or network uses local data unless the address ends in `?db=live`, and any other address refuses to start, so a forgotten address can't look as if it works while saving in one browser only. Everything that differs per installation is in `deployment.js`, so someone can run the same code on their own database, or on another backend by writing a data layer for the functions listed in `data-service.js`.
+- **Swappable data layer:** the app talks to one data layer (`data-service.js`). Local storage for testing, Supabase in production. Which one follows from the address: the addresses in `deployment.js` use the real database, your own computer or network uses local data unless the address ends in `?db=live`, and any other address refuses to start, so a forgotten address can't look as if it works while saving in one browser only. Everything that differs per installation is in `deployment.js`, so someone can run the same code on their own database, or on another backend by writing one data layer. What that layer must do is in `docs/data-layer.md`, and `tests/contract.js` checks it.
 - **Hosting:** static files, no build step, GitHub Pages. Branch `dev` for work, `main` is live.
 - **Personal view settings stay on the device:** current view (Taken, Doelen, Inbox), calendar mode, grouping, filters, folded lists, hidden sidebar. They are not shared and not in the database.
 
@@ -290,7 +290,7 @@ Decided on 2026-11-09: one shared database and one version of the software for e
 - **Saving is tested too:** `tests/store.test.js` runs the Store on the local data layer in node: all or nothing, undo, the `changed_at` check, and the rules that need more than one row.
 - **Scripts from outside are pinned:** a script from a CDN carries an `integrity` hash, so the browser refuses a file that isn't exactly the one checked. Only files that are in the package itself: a `.min.js` jsDelivr generates can change, and the hash would then block the app for everyone. `tests/release.test.js` fails without it. The Google Fonts stylesheet can't have one, because Google serves different CSS per browser; a stylesheet can't read the login.
 - **Teams are kept apart, proven against the real database:** `tests/teams.test.js`. It was checked to fail by breaking the rule on one table and switching Row Level Security off on another.
-- **Before every release:** `node tests/model.test.js`, `node tests/store.test.js`, `node tests/release.test.js`, `node tests/restore.test.js`, `tests/escape.html` in the browser. After a change in `migrations/`: `node tests/teams.test.js` too.
+- **Before every release:** `node tests/model.test.js`, `node tests/store.test.js`, `node tests/release.test.js`, `node tests/restore.test.js`, `node tests/contract.test.js`, `tests/escape.html` in the browser. After a change in `migrations/`: `node tests/teams.test.js` too.
 
 ## 8. Possible future
 

@@ -33,7 +33,7 @@ JAPT is static files and a Supabase project. Someone else can run it on their ow
 
 **Inviting someone:** Authentication > Users > Invite. They join your team by themselves but have no access yet: set `allowed` to true for them in Table Editor > `members`. Beheer then sets their name and colour.
 
-**Another backend than Supabase:** write a new `data-....js` that offers the functions listed in `data-service.js`, and name it in `deployment.js`. `model.js`, the Store and the screens stay as they are. What you may reach must then be enforced on that backend: the rules in `migrations/` only exist in Postgres, and nothing in a browser can enforce them.
+**Another backend than Supabase:** write one file for it, name it in `data-service.js`, `index.html` and `deployment.js`. `model.js`, the Store and the screens stay as they are. [`docs/data-layer.md`](docs/data-layer.md) says exactly what it must do, and `tests/contract.html` checks it.
 
 ## Restoring a backup
 
@@ -96,12 +96,16 @@ node tests/restore.test.js
 ```
 
 ```bash
+node tests/contract.test.js
+```
+
+```bash
 node tests/teams.test.js
 ```
 
 The first tests the rules (dates, blocks, work periods, lists, deadlines, repeats, order, filters). The second tests saving on the local data layer: all or nothing, undo, the check on changes by someone else, and the rules that need more than one row. The third checks that every file in `index.html` carries the app version, that no line of code is over 140 characters, and that the escape test has a step for every calendar view and Beheer tab.
 
-The fourth checks that a backup becomes a correct restore script. The fifth runs against the real database and proves that one team can't reach another team's data: on every table and on the save function, a login of team A tries to read, add, change and delete what is team B's. It needs two test logins (`japt-test-a@example.com` and `japt-test-b@example.com`), then `tools/teams-test-setup.sql` once, and their passwords in `tests/teams-test.env`, which stays out of git:
+The fourth checks that a backup becomes a correct restore script. The fifth checks that the local data layer does what every data layer must do; `tests/contract.html?db=live` checks the same on the layer in `deployment.js`, from a browser where you are logged in. The sixth runs against the real database and proves that one team can't reach another team's data: on every table and on the save function, a login of team A tries to read, add, change and delete what is team B's. It needs two test logins (`japt-test-a@example.com` and `japt-test-b@example.com`), then `tools/teams-test-setup.sql` once, and their passwords in `tests/teams-test.env`, which stays out of git:
 
 ```
 JAPT_TEST_A_PASSWORD=...
@@ -121,7 +125,7 @@ One file per task; each file starts with what it is responsible for.
 | `i18n/nl.js`, `i18n/i18n.js` | All interface text, by key |
 | `model.js` | The rules as pure functions, without DOM or storage |
 | `tables.js` | The names of the database tables, for the Store and every data layer |
-| `data-service.js` | Picks the data layer, and the contract every data layer offers |
+| `data-service.js` | Picks the data layer; what each one must do is in `docs/data-layer.md` |
 | `data-local.js`, `data-supabase.js` | Storage in this browser; storage in Supabase, and the login |
 | `store.js` | Data in memory; every action as one save with its undo |
 | `ui.js` | Shared pieces: cards, windows, the Escape key, toast |

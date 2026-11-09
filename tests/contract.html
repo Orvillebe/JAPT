@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JAPT contract-test</title>
+<!-- Runs tests/contract.js on the data layer named in deployment.js. Open it as contract.html?db=live, and log in
+     to JAPT in this browser first. It makes its own rows (ids starting with contract-) in your team and removes them. -->
+<style>
+  body { font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width: 760px; margin: 40px auto; padding: 0 16px; color: #232323; background: #f6f5f2 }
+  button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid #ccc; background: #fff; cursor: pointer }
+  #out { font-weight: 600; margin-top: 14px } li { color: #b3261e; font-size: 14px }
+</style>
+</head>
+<body>
+<h1>Contract-test van de datalaag</h1>
+<p id="which"></p>
+<button id="run">Test starten</button>
+<div id="out"></div>
+<ul id="fails"></ul>
+<div id="loading" hidden></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
+<script src="../version.js"></script>
+<script src="../deployment.js"></script>
+<script src="../config.js"></script>
+<script src="../i18n/nl.js"></script>
+<script src="../i18n/i18n.js"></script>
+<script src="../tables.js"></script>
+<script src="../data-local.js"></script>
+<script src="../data-supabase.js"></script>
+<script src="../data-service.js"></script>
+<script src="contract.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  $('which').textContent = 'Datalaag: ' + JAPT_CONFIG.backend;
+  $('run').onclick = async () => {
+    $('run').disabled = true; $('fails').innerHTML = ''; $('out').textContent = 'Bezig…';
+    if (DataService.needsLogin && !await DataService.getSession()) {
+      $('out').textContent = 'Meld je eerst aan in JAPT, in deze browser, en open dit dan opnieuw.';
+      $('run').disabled = false;
+      return;
+    }
+    const { passed, failures } = await runDataLayerContract(DataService, SCHEMA_VERSION);
+    $('out').textContent = failures.length ? `${failures.length} mislukt, ${passed} geslaagd.` : `GESLAAGD: ${passed} controles.`;
+    failures.forEach(f => { const li = document.createElement('li'); li.textContent = f; $('fails').appendChild(li); });
+    $('run').disabled = false;
+  };
+</script>
+</body>
+</html>

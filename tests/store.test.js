@@ -362,6 +362,40 @@ test('a task dropped between two others lands between them', async () => {
   eq(S.itemsOf('open').map(k => k.id), ['a', 'c', 'b']);
 });
 
+test('a meeting that fills a block from today sends the task back to the list, without saving anything', async () => {
+  const { S, stored } = await app({ tasks: [task('a')], block_placements: [inBlock('p1', 'a', TOMORROW, 'do')] });
+  eq(S.listOf(S.task('a')), 'planned');
+  S.setMeetingsOn(d => (d === TOMORROW ? [{ start: 500, end: 760 }] : []));
+  eq(S.listOf(S.task('a')), 'open');
+  eq((await stored('block_placements')).length, 1);
+  S.setMeetingsOn(() => []);
+  eq(S.listOf(S.task('a')), 'planned');
+});
+test('a meeting that leaves room in the block changes nothing', async () => {
+  const { S } = await app({ tasks: [task('a')], block_placements: [inBlock('p1', 'a', TOMORROW, 'do')] });
+  S.setMeetingsOn(() => [{ start: 600, end: 660 }]);
+  eq(S.listOf(S.task('a')), 'planned');
+});
+test('a task with another free block stays planned', async () => {
+  const { S } = await app({ tasks: [task('a')], block_placements: [inBlock('p1', 'a', TOMORROW, 'do'), inBlock('p2', 'a', NEXT_MONDAY, 'ma')] });
+  S.setMeetingsOn(d => (d === TOMORROW ? [{ start: 500, end: 760 }] : []));
+  eq(S.listOf(S.task('a')), 'planned');
+  eq(S.idx().of('a').blocks.length, 1);
+});
+test('in the past nothing moves', async () => {
+  const { S } = await app({ tasks: [task('a')], block_placements: [inBlock('p1', 'a', LAST_MONDAY, 'ma')] });
+  S.setMeetingsOn(() => [{ start: 500, end: 760 }]);
+  eq(S.listOf(S.task('a')), 'planned');
+});
+test('planning it elsewhere gives up the covered place', async () => {
+  const { S, stored } = await app({ tasks: [task('a')], block_placements: [inBlock('p1', 'a', TOMORROW, 'do')] });
+  S.setMeetingsOn(d => (d === TOMORROW ? [{ start: 500, end: 760 }] : []));
+  await S.plan('a', { date: NEXT_MONDAY, blockId: 'ma' });
+  eq((await stored('block_placements')).map(p => p.date), [NEXT_MONDAY]);
+  S.setMeetingsOn(() => []);
+  eq(S.idx().of('a').blocks.length, 1);
+});
+
 /* ---------- repeats ---------- */
 
 test('checking off a repeating task makes the next one in the Backlog, with its people', async () => {

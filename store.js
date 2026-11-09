@@ -20,6 +20,7 @@ const Store = (() => {
   const M = Model, { STAGE, LIST } = M;
   let raw = Object.fromEntries(TABLES.map(t => [t, []]));
   let cache = null, listeners = [];
+  let meetingsOn = () => [];   // the agenda tells what is known; see setMeetingsOn
 
   const nowIso = () => new Date().toISOString();
   const td = () => M.today();
@@ -40,6 +41,14 @@ const Store = (() => {
     listeners.forEach(f => f());
   }
   const onChange = f => listeners.push(f);
+
+  // The agenda isn't stored data, but a meeting that fills a block from today on means there is no room for
+  // what is planned in it (docs/design.md, Meetings). Called by the agenda when it knows its meetings.
+  function setMeetingsOn(lookup) {
+    meetingsOn = lookup;
+    cache = null;
+  }
+  const isCovered = (date, block) => date >= td() && M.freeParts(block, meetingsOn(date)).length === 0;
 
   /* ---------- saving ---------- */
 
@@ -149,7 +158,7 @@ const Store = (() => {
     who.forEach(v => v.sort((a, b) => (memberOrder[a] ?? 99) - (memberOrder[b] ?? 99)));
     const idx = M.planIndex({
       blocks: raw.work_blocks, blockPlacements: raw.block_placements, periodPlacements: raw.period_placements,
-      segments: raw.period_segments, periodActive: periodActive()
+      segments: raw.period_segments, periodActive: periodActive(), isCovered
     });
     cache = {
       idx, who,
@@ -377,6 +386,7 @@ const Store = (() => {
   //   fromPeriod  dragged from the period view (that period's first day): a task with several blocks
   //               in that period moves as one
   //   mark        {id, after}: next to which task it was dropped, for the order
+  const coveredPlacement = p => { const b = find('work_blocks', p.blockId); return !!b && isCovered(p.date, b); };
   const placementTable = place => (place.period ? 'period_placements' : 'block_placements');
   const blocksInPeriod = (taskId, per) => idx().of(taskId).blocks.filter(b => b.date >= per.start && b.date <= per.end);
   async function plan(taskId, to, { from = null, fromPeriod = null, mark = null } = {}) {
@@ -392,6 +402,8 @@ const Store = (() => {
     const drop = (table, id) => { if (!ops.some(o => o.id === id)) ops.push(del(table, id)); };
     const out = place => { const p = I.placement(place, taskId); if (p) drop(placementTable(place), p.id); };
     const outBlocksIn = per => blocksInPeriod(taskId, per).forEach(b => drop('block_placements', b.id));
+    // Planned again: the place a meeting took over is given up, or the task would return there later.
+    raw.block_placements.filter(p => p.taskId === taskId && coveredPlacement(p)).forEach(p => drop('block_placements', p.id));
     if (from) out(from);
     if (fromPeriod) { const sp = periodAt(fromPeriod); if (sp) outBlocksIn(sp); }
     // Within one work period a task is in the period itself or on fixed days, never both: the new place wins.
@@ -676,7 +688,7 @@ const Store = (() => {
   }
 
   return {
-    load, reload, onChange,
+    load, reload, onChange, setMeetingsOn,
     setting, periodActive, periodSetUp,
     idx, task, goal, client, member, whoOf, members, allMembers, clients, goals, openGoals, tasks, inbox, clientOfTask,
     listOf, shownList, dueSoon, isLate, itemsOf, goalStats, blocks, segments, periodAt, periodSetting, blocksOn,

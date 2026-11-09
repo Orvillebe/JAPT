@@ -30,7 +30,10 @@ const Agenda = (() => {
     const url = Store.calendarUrl(), from = days[0], to = days[days.length - 1];
     const notOld = () => Date.now() - source.at < JAPT_CONFIG.agendaMinutes * 60000;
     const fresh = source && (source.local ? !url : source.url === url && notOld());
-    if (fresh) { if (!win || from < win.from || to > win.to) expand(from, to); return; }
+    if (fresh) {
+      if (!win || from < win.from || to > win.to) { expand(from, to); setTimeout(App.renderWhenFree, 0); }
+      return;
+    }
     if (loading) return;
     loading = (url ? readLink(url) : readLocal())
       .then(() => { expand(from, to); App.renderWhenFree(); })
@@ -76,6 +79,7 @@ const Agenda = (() => {
       try { occurrences(ev, win).forEach(put); } catch (e) { console.warn('Meeting skipped', ev.summary, e); }
     }
     byDay.forEach(v => v.sort((a, b) => a.start - b.start));
+    Store.setMeetingsOn(on);
   }
   const toMeeting = (title, s, e) => {
     const date = M.localDs(s), end = M.localDs(e) === date ? e.getHours() * 60 + e.getMinutes() : 24 * 60;

@@ -139,8 +139,6 @@ const CalendarWeek = (() => {
     const position = blocks.findIndex(b => b.key === key) + 1;
     return chip(k, place, { side: part(blocks.length, position) + unplanBtn(place, t('cal.out_of_block')) });
   }
-  // A part of a block where a task fits; shorter than this is no room (the height of one task).
-  const MIN_FREE_MINUTES = 30;
   const BLOCK_HEAD_PX = 26, BLOCK_FOOT_PX = 6;   // the block's own top line and bottom edge
   const isWholeBlock = (parts, block) => parts.length === 1 && parts[0].start === block.start && parts[0].end === block.end;
 
@@ -152,7 +150,8 @@ const CalendarWeek = (() => {
       return `<div class="list" style="top:${top}px;height:${bottom - top}px">${i === 0 ? chips || dropHere() : ''}</div>`;
     }).join('');
   }
-  // Tasks already planned in a block that a meeting now covers completely: they stay planned, this says so.
+  // In the past a covered block keeps what was planned in it (from today on it goes back to the list); this
+  // says so, because the meeting is in front of it.
   function coveredTasksHtml(ids) {
     if (!ids.length) return '';
     const titles = ids.map(id => (Store.task(id) || {}).title).filter(Boolean).join(', ');
@@ -164,7 +163,7 @@ const CalendarWeek = (() => {
     const position = `top:${topPx(block.start, firstHour)}px;height:${heightPx(block)}px`;
     const label = block.label ? `<span>${esc(block.label)}</span>` : '';
     const head = `<div class="bh">${label}<span>${UI.span(UI.fmt(block.start), UI.fmt(block.end))}</span></div>`;
-    const parts = M.freeParts(block, meetings, MIN_FREE_MINUTES);
+    const parts = M.freeParts(block, meetings);
     if (!parts.length) {
       return `<div class="block noroom" data-noroom data-place="${P(place)}" style="${position}">${head}${coveredTasksHtml(ids)}</div>`;
     }

@@ -119,9 +119,10 @@ function createModel(CFG) {
     return out;
   }
 
-  // The parts of a block no meeting covers and that are at least minLength long, in time order. Tasks are
-  // only placed there: a meeting is time you aren't free.
-  function freeParts(block, meetings, minLength) {
+  // The parts of a block no meeting covers and that can hold a task, in time order. Tasks are only placed
+  // there: a meeting is time you aren't free. Shorter than half an hour has no room for one task.
+  const MIN_FREE_MINUTES = 30;
+  function freeParts(block, meetings, minLength = MIN_FREE_MINUTES) {
     let parts = [{ start: block.start, end: block.end }];
     for (const m of meetings) {
       parts = parts.flatMap(p => {
@@ -195,13 +196,15 @@ function createModel(CFG) {
   // Placements in a block that doesn't exist on that date, or in a period that no longer matches the
   // setting, don't count (they are what's left after a change; the Store cleans them up).
   // Every entry carries its place, so a screen never has to build one by hand.
-  function planIndex({ blocks, blockPlacements, periodPlacements, segments, periodActive }) {
+  // isCovered(date, block): a meeting leaves no room in that block on that date. What is planned there
+  // doesn't count as planned for now; the placement stays, so it counts again when the meeting goes.
+  function planIndex({ blocks, blockPlacements, periodPlacements, segments, periodActive, isCovered = () => false }) {
     const blockById = Object.fromEntries(blocks.map(b => [b.id, b]));
     const byTask = new Map(), byBlock = new Map(), byPeriod = new Map();
     const t = id => { if (!byTask.has(id)) byTask.set(id, { blocks: [], periods: [] }); return byTask.get(id); };
     for (const p of blockPlacements) {
       const b = blockById[p.blockId];
-      if (!b || !blockOnDate(b, p.date)) continue;
+      if (!b || !blockOnDate(b, p.date) || isCovered(p.date, b)) continue;
       const place = { date: p.date, blockId: p.blockId };
       const slot = { ...p, start: b.start, end: b.end, key: placeKey(place), place };
       t(p.taskId).blocks.push(slot);
@@ -363,7 +366,7 @@ function createModel(CFG) {
     parseD, toDs, addDays, addMonths, daysBetween, daysIn, weekday, today, setToday, localDs,
     setWeekStart, getWeekStart, weekFirst, weekDays, isWeekend, weekOrder,
     SNAP, MINLEN, snap, hhmm, hhmm2, parseHm,
-    sideBySide, freeParts, blockOnDate, blocksOn, currentBlocks, blockRevision, blockProblem, fitBlock,
+    sideBySide, freeParts, MIN_FREE_MINUTES, blockOnDate, blocksOn, currentBlocks, blockRevision, blockProblem, fitBlock,
     periodIn, nextPeriodStart,
     placeKey, placeText, parsePlace, samePlace,
     planIndex, STAGE, LIST, listOf, dueSoon, isLate, onlyPlannedInPast, shownList, pastDoneDate,

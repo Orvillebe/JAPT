@@ -62,9 +62,9 @@ const Inbox = (() => {
 
   function fillGoal() {
     const sel = $('ibGoal'), cur = sel.value;
-    sel.innerHTML = UI.goalOptions(t('goal.not_yet'), false, null);
+    sel.innerHTML = GoalPicker.options(t('goal.not_yet'), false, null);
     sel.value = Store.goal(cur) && !Store.goal(cur).achievedOn ? cur : '';
-    UI.gpBuild(sel);
+    GoalPicker.build(sel);
   }
 
   /* ---------- drawing ---------- */
@@ -179,7 +179,7 @@ const Inbox = (() => {
       inp.value = '';
       $('ibDesc').value = '';
       $('ibGoal').value = '';
-      UI.setDeadline(dl, '', '');
+      DeadlinePicker.set(dl, '', '');
       who = [];
       render();
     }
@@ -271,7 +271,7 @@ const Inbox = (() => {
   function init() {
     $('ibForm').onsubmit = e => { e.preventDefault(); add(); };
     $('ibWho').onclick = toggleWho;
-    UI.wrapDeadline($('ibDeadline'));
+    DeadlinePicker.wrap($('ibDeadline'));
     $('ibUndoBtn').onclick = undoLast;
     $('ibTabs').onclick = switchInboxTab;
     $('ibRecent').onclick = binRecent;

@@ -21,7 +21,7 @@ const Tasks = (() => {
 
   /* ---------- folding ---------- */
 
-  const itemsOf = key => Store.itemsOf(key, UI.passes);
+  const itemsOf = key => Store.itemsOf(key, FilterPicker.passes);
   // Only Nog niet ingepland is open; when it's empty, only Ingepland. With a search or filter, every list
   // with results is open. A manual choice wins until the situation changes.
   const defaultOpenKey = () => {
@@ -29,9 +29,9 @@ const Tasks = (() => {
     return itemsOf(M.LIST.PLANNED).length ? M.LIST.PLANNED : null;
   };
   const defaultSig = () => (
-    UI.filterCount() ? 'f' + LISTS.map(k => (itemsOf(k).length ? 1 : 0)).join('') : String(defaultOpenKey())
+    FilterPicker.count() ? 'f' + LISTS.map(k => (itemsOf(k).length ? 1 : 0)).join('') : String(defaultOpenKey())
   );
-  const defaultClosed = key => (UI.filterCount() ? !itemsOf(key).length : key !== defaultOpenKey());
+  const defaultClosed = key => (FilterPicker.count() ? !itemsOf(key).length : key !== defaultOpenKey());
   const isClosed = key => (View.fold[key] !== undefined ? View.fold[key] : defaultClosed(key));
   let foldSig;
 
@@ -104,11 +104,11 @@ const Tasks = (() => {
   function render() {
     const fq = $('fq');
     if (document.activeElement !== fq) fq.value = View.filter.q;
-    UI.msRender('fWho', 'who', 'side');
-    UI.msRender('fGoal', 'goal', 'side');
-    UI.msRender('fClient', 'client', 'side');
+    FilterPicker.render('fWho', 'who', 'side');
+    FilterPicker.render('fGoal', 'goal', 'side');
+    FilterPicker.render('fClient', 'client', 'side');
     $('fpanel').hidden = !showFilters;
-    const fc = UI.filterCount(), fb = $('btnFilter');
+    const fc = FilterPicker.count(), fb = $('btnFilter');
     fb.innerHTML = fc ? `${t('filter.button')}<span class="fcount">${fc}</span>` : t('filter.button');
     fb.classList.toggle('active', fc > 0);
     $('fClear').disabled = fc === 0;
@@ -225,7 +225,7 @@ const Tasks = (() => {
     const title = esc(k ? k.title : ''), hint = t('task.ph');
     const titleInput = `<input type="text" name="title" autocomplete="off" placeholder="${hint}" value="${title}">`;
     const noteArea = `<textarea name="note">${esc(k ? k.note || '' : '')}</textarea>`;
-    const goals = UI.goalOptions(t(inInbox ? 'goal.not_yet' : 'goal.choose'), !inInbox, k ? k.goalId : null);
+    const goals = GoalPicker.options(t(inInbox ? 'goal.not_yet' : 'goal.choose'), !inInbox, k ? k.goalId : null);
     return html`<form>
       <h3>${t(k ? 'task.edit_title' : 'task.new_title')}</h3>
       ${formField(t('form.task'), titleInput)}
@@ -333,9 +333,9 @@ const Tasks = (() => {
     };
 
     state.goalEl.value = k && k.goalId != null ? k.goalId : '';
-    UI.gpBuild(state.goalEl);
-    UI.wrapDeadline(state.deadlineEl);
-    if (k) UI.setDeadline(state.deadlineEl, k.deadline, k.repeat);
+    GoalPicker.build(state.goalEl);
+    DeadlinePicker.wrap(state.deadlineEl);
+    if (k) DeadlinePicker.set(state.deadlineEl, k.deadline, k.repeat);
 
     drawWho(state);
     q('[data-who]').onclick = e => toggleWho(state, e);
@@ -366,7 +366,7 @@ const Tasks = (() => {
     $('btnNewTask').onclick = openNew;
     $('fq').oninput = e => { View.filter.q = e.target.value.trim(); View.save(); App.render(); };
     $('btnFilter').onclick = () => { showFilters = !showFilters; render(); };
-    $('fClear').onclick = () => { UI.clearFilter(); $('fq').value = ''; App.render(); };
+    $('fClear').onclick = () => { FilterPicker.clear(); $('fq').value = ''; App.render(); };
     $('groupSeg').onclick = e => {
       const b = e.target.closest('[data-group]');
       if (b) { View.groupBy = b.dataset.group; View.save(); render(); }

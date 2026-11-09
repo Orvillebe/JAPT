@@ -14,15 +14,18 @@
  *   data-local.js        - storage in this browser (testing)
  *   data-service.js      - picks the data layer (Supabase on the live address: next build step)
  *   store.js             - data in memory, every action as one save with its undo
- *   ui.js                - shared pieces: view memory, cards, windows, Escape, pickers, toast
+ *   ui.js                - shared pieces: view memory, cards, windows, Escape, toast
  *   figures.js           - the small figures that sometimes walk by when a task is checked off
+ *   filter-picker.js, goal-picker.js, deadline-picker.js - the fold-out lists to choose with
  *   drag.js              - dragging a task: one handler, drop zones per screen
  *   agenda.js            - meetings from the agenda link
- *   calendar.js          - Taken page, right: day, week, period and list views, dragging
+ *   calendar-week.js, -period.js, -list.js, -card.js - the calendar's views and the open task card
+ *   calendar.js          - Taken page, right: the view table, the bar, dropping, swiping
  *   tasks.js             - Taken page, left: the lists, the task form, checking off
  *   goals.js             - Doelen page
  *   inbox.js             - Inbox page
- *   manage.js            - Beheer window
+ *   manage-blocks.js, -period.js, -other.js - the tabs of Beheer
+ *   manage.js            - Beheer window: tabs and drawing
  *   export.js            - backup and analysis export
  *   app.js               - this file: starting, version check, pages, reloading at natural moments
  */
@@ -65,7 +68,7 @@ const App = (() => {
   }
   function render() {
     if (!started) return;
-    UI.pruneFilter();
+    FilterPicker.prune();
     Tasks.render();
     if (View.page === 'tasks') Calendar.render();
     if (View.page === 'goals') Goals.render();
@@ -114,7 +117,7 @@ const App = (() => {
     if (!started) {
       started = true;
       Calendar.init(); Tasks.init(); Goals.init(); Inbox.init(); Manage.init();
-      UI.initFilters(render); UI.initGoalPicker();
+      FilterPicker.init(render); GoalPicker.init();
       Store.onChange(queueRender);
       document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
         show(b.dataset.view);

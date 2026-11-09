@@ -5,9 +5,8 @@
  *   - View: what this device remembers (page, calendar mode, grouping, filters, folded lists)
  *   - Formatting dates and times in Dutch, colours of people and goals, avatars
  *   - The task card and its meta lines (sidebar, list view, Inbox, goal view)
- *   - Windows (dialogs) that exist only while open, and the one Escape key handler
- *   - The filter pickers (shared by the sidebar and the list view), the goal picker, the deadline picker:
- *     their fold-outs are made when they open and removed when they close
+ *   - Windows (dialogs) that exist only while open, what else closes with them, and the one Escape key handler
+ *   - What the pickers (filter-picker.js, goal-picker.js, deadline-picker.js) build on
  *   - Toast with Ongedaan, problems shown at their field, saving with the changed_at check (act)
  *
  * Screens own their own DOM and events; this file only offers pieces.
@@ -140,7 +139,7 @@ const UI = (() => {
   }
   const whoHtml = k => Store.whoOf(k.id).map(avatar).join('');
 
-  // The Plan line: a link per period and per block the task is in; it jumps there (Calendar.jump).
+  // The Plan line: a link per period and per block the task is in; it jumps there (calendar-card.js).
   function planLinks(k) {
     const p = Store.idx().of(k.id);
     if (!p.blocks.length && !p.periods.length) return '';
@@ -174,7 +173,7 @@ const UI = (() => {
 
   // One handler for the whole app. Each piece that can be open registers a function that closes it and
   // says whether something was open; the first one that was open is closed, one per press. Pieces
-  // register from inner to outer (pickers before the calendar card). A dialog closes itself (the
+  // are asked in the order they registered: the deadline picker first. A dialog closes itself (the
   // browser does that) when nothing inside it was open.
   const escapers = [];
   const onEscape = fn => { escapers.push(fn); };
@@ -188,6 +187,11 @@ const UI = (() => {
 
   /* ---------- windows ---------- */
 
+  // What else closes when a window closes. This file loads first and does not know the pickers, so
+  // they register here; run in the order registered.
+  const windowClosers = [];
+  const onWindowClose = fn => { windowClosers.push(fn); };
+
   // A window that exists only while it is open: made here, removed when it closes (by a button, Escape,
   // or a click beside it when closeOutside allows that). Returns the <dialog>; fill it after this call.
   function dialog({ cls = '', closeOutside = () => false, onClose = null } = {}) {
@@ -197,8 +201,7 @@ const UI = (() => {
       if (e.target === d && closeOutside()) d.close();
     });
     d.addEventListener('close', () => {
-      dkClose();
-      gpClose();
+      windowClosers.forEach(fn => fn());
       d.remove();
       if (onClose) onClose();
     });
@@ -207,524 +210,13 @@ const UI = (() => {
     return d;
   }
 
-  /* ---------- filter pickers ---------- */
-
-  // A filter is a fold-out list with checkboxes, in the same look as the pickers in the forms. Only one
-  // is open at a time; its list exists only while it is open.
-  let msOpen = null;                 // id of the open picker
-  const msShown = new Map();         // id -> {elId, key}: where each picker is drawn, to draw it again
-  const MS = {
-    who: {
-      all: 'filter.everyone',
-      kind: 'chips',
-      opts: () => [
-        ...Store.members().map(u => ({ v: u.id, t: u.name, who: u.id })),
-        { v: 'none', t: t('filter.nobody'), who: null }
-      ]
-    },
-    goal: {
-      all: 'filter.all_goals',
-      kind: 'rows',
-      opts: () => byClient(Store.openGoals()).flatMap(x => [
-        { head: x.name },
-        ...x.goals.map(g => ({ v: g.id, t: g.name, dot: g }))
-      ])
-    },
-    client: {
-      all: 'filter.all_clients',
-      kind: 'rows',
-      opts: () => [
-        ...Store.clients().map(c => ({ v: c.id, t: c.name })),
-        { v: 'intern', t: t('client.intern') }
-      ]
-    }
-  };
+  /* ---------- goals by client ---------- */
 
   // Goals grouped as on Doelen: clients by name, then Intern; groups without goals left out.
   const byClient = goals => [
     ...Store.clients().map(c => ({ name: c.name, goals: goals.filter(g => g.clientId === c.id) })),
     { name: t('client.intern'), goals: goals.filter(g => g.clientId == null) }
   ].filter(x => x.goals.length);
-  const choices = key => MS[key].opts().filter(o => !o.head);
-
-  function msBox(key, option) {
-    const checked = View.filter[key].includes(option.v) ? 'checked' : '';
-    return `<input type="checkbox" data-msk="${key}" value="${esc(option.v)}" ${checked}>`;
-  }
-
-  // "Nobody" is not a person, so it has no colour of its own.
-  function msChip(key, option) {
-    const colours = option.who != null ? pstyle(option.who) : '--pc:var(--grey-d);--pcl:var(--grey-b)';
-    return `<label class="mswho" style="${colours}">${msBox(key, option)}<span>${esc(option.t)}</span></label>`;
-  }
-
-  function msRow(key, option) {
-    if (option.head) return `<div class="gph">${esc(option.head)}</div>`;
-    const dot = option.dot ? goalDot(option.dot) : '';
-    return `<label class="msr">${dot}<span class="gpt">${esc(option.t)}</span>${msBox(key, option)}</label>`;
-  }
-
-  function msList(key) {
-    const m = MS[key];
-    const drawOption = m.kind === 'chips' ? msChip : msRow;
-    const body = m.opts().map(option => drawOption(key, option)).join('');
-    return html`
-      <div class="msbk"></div>
-      <div class="msb ${m.kind}">${body || `<div class="none-msg">${t('filter.nothing')}</div>`}</div>`;
-  }
-
-  function msRender(elId, key, host) {
-    const id = host + '-' + key, sel = View.filter[key], open = msOpen === id;
-    msShown.set(id, { elId, key });
-    const names = choices(key).filter(o => sel.includes(o.v)).map(o => o.t);
-    const label = names.length ? esc(names.join(', ')) : t(MS[key].all);
-    $(elId).innerHTML = html`
-      <div class="ms ${open ? 'open' : ''}" data-msid="${id}">
-        <button type="button" class="mss ${names.length ? 'on' : ''}" aria-expanded="${open}">${label}</button>
-        ${open ? msList(key) : ''}
-      </div>`;
-  }
-
-  function msRedraw(id) {
-    const shown = msShown.get(id);
-    if (shown && $(shown.elId)) msRender(shown.elId, shown.key, id.split('-')[0]);
-  }
-
-  function msClose() {
-    if (!msOpen) return false;
-    const id = msOpen;
-    msOpen = null;
-    msRedraw(id);
-    return true;
-  }
-
-  function msToggle(id) {
-    const wasOpen = msOpen === id;
-    msClose();
-    if (!wasOpen) {
-      msOpen = id;
-      msRedraw(id);
-    }
-  }
-
-  const clearFilter = () => {
-    View.filter = NO_FILTER();
-    View.save();
-  };
-
-  // A filter on something that no longer exists (an achieved or deleted goal, a removed person, a
-  // deleted client) is dropped. App.render calls this once before drawing.
-  function pruneFilter() {
-    let changed = false;
-    for (const key of Object.keys(MS)) {
-      const ok = choices(key).map(o => o.v), keep = View.filter[key].filter(v => ok.includes(v));
-      if (keep.length !== View.filter[key].length) {
-        View.filter[key] = keep;
-        changed = true;
-      }
-    }
-    if (changed) View.save();
-  }
-
-  function onFilterClick(e) {
-    if (e.target.closest('.msbk')) { msClose(); return; }
-    const button = e.target.closest('.ms > .mss');
-    if (button) { msToggle(button.parentElement.dataset.msid); return; }
-    if (!e.target.closest('.ms')) msClose();
-  }
-
-  function applyFilterBox(box) {
-    const values = View.filter[box.dataset.msk], i = values.indexOf(box.value);
-    if (box.checked && i < 0) values.push(box.value);
-    else if (!box.checked && i >= 0) values.splice(i, 1);
-  }
-
-  function initFilters(onChange) {
-    document.addEventListener('click', onFilterClick);
-    onEscape(msClose);
-    document.addEventListener('change', e => {
-      const box = e.target.closest('input[data-msk]');
-      if (!box) return;
-      applyFilterBox(box);
-      View.save();
-      onChange();
-    });
-  }
-
-  const passes = k => M.passes(k, View.filter, Store.goal, Store.whoOf);
-  const filterCount = () => M.filterCount(View.filter);
-
-  /* ---------- the goal picker ---------- */
-
-  // Over a <select> (which keeps the value and is what forms read): a button showing the goal, and a
-  // list grouped as on Doelen, made when it opens and removed when it closes.
-  let gpOpen = null;   // the .gp element whose list is open
-  const gpSelect = w => w.previousElementSibling;
-
-  function gpWrapper(sel) {
-    const next = sel.nextElementSibling;
-    if (next && next.classList.contains('gp')) return next;
-    const w = document.createElement('div');
-    w.className = 'gp';
-    sel.classList.add('gpsel');
-    sel.after(w);
-    return w;
-  }
-
-  function gpBuild(sel) {
-    const w = gpWrapper(sel);
-    if (gpOpen === w) gpClose();
-    const first = sel.options[0], cur = Store.goal(sel.value);
-    const name = cur ? esc(cur.name) : esc(first ? first.textContent : '');
-    w.innerHTML = html`
-      <button type="button" class="gpb" aria-haspopup="listbox" aria-expanded="false">
-        ${cur ? goalDot(cur) : ''}<span class="gpn ${cur ? '' : 'ph'}">${name}</span>
-      </button>`;
-  }
-
-  function gpGoalRow(g, cur) {
-    const achieved = g.achievedOn ? ' ' + t('goal.achieved_paren') : '';
-    return html`
-      <button type="button" class="gpo ${cur && cur.id === g.id ? 'on' : ''}" data-gpv="${g.id}">
-        ${goalDot(g)}<span class="gpt">${esc(g.name)}${achieved}</span><i class="gpr"></i>
-      </button>`;
-  }
-
-  function gpBlankRow(option, cur) {
-    return html`
-      <button type="button" class="gpo none ${!cur ? 'on' : ''}" data-gpv="">
-        <span class="gpt">${esc(option.textContent)}</span><i class="gpr"></i>
-      </button>`;
-  }
-
-  function gpList(sel) {
-    const first = sel.options[0], blank = first && first.value === '';
-    const goals = [...sel.options].map(o => o.value).filter(v => v !== '').map(v => Store.goal(v)).filter(Boolean);
-    const cur = goals.find(g => g.id === sel.value);
-    const none = blank && !first.disabled ? gpBlankRow(first, cur) : '';
-    const group = x => `<div class="gph">${esc(x.name)}</div>${x.goals.map(g => gpGoalRow(g, cur)).join('')}`;
-    return html`
-      <div class="gpbk" data-gpclose></div>
-      <div class="gpp" role="listbox">${none}${byClient(goals).map(group).join('')}</div>`;
-  }
-
-  function gpShow(w) {
-    gpClose();
-    w.insertAdjacentHTML('beforeend', gpList(gpSelect(w)));
-    w.classList.add('open');
-    w.querySelector('.gpb').setAttribute('aria-expanded', 'true');
-    gpOpen = w;
-    if (!matchMedia(FULLSCREEN_POPUP_QUERY).matches) w.querySelector('.gpp').scrollIntoView({ block: 'nearest' });
-  }
-
-  function gpClose() {
-    if (!gpOpen) return false;
-    const w = gpOpen;
-    gpOpen = null;
-    w.querySelectorAll('.gpbk,.gpp').forEach(x => x.remove());
-    w.classList.remove('open');
-    const button = w.querySelector('.gpb');
-    if (button) button.setAttribute('aria-expanded', 'false');
-    return true;
-  }
-
-  function gpPick(w, value) {
-    const sel = gpSelect(w);
-    sel.value = value;
-    sel.dispatchEvent(new Event('change', { bubbles: true }));
-    gpBuild(sel);
-  }
-
-  function onGoalPickerClick(e) {
-    const w = e.target.closest('.gp');
-    if (!w || e.target.closest('[data-gpclose]')) { gpClose(); return; }
-    const option = e.target.closest('[data-gpv]');
-    if (option) { gpPick(w, option.dataset.gpv); return; }
-    if (e.target.closest('.gpb')) {
-      e.preventDefault();
-      if (gpOpen === w) gpClose();
-      else gpShow(w);
-    }
-  }
-
-  function initGoalPicker() {
-    document.addEventListener('click', onGoalPickerClick);
-    onEscape(gpClose);
-  }
-
-  function goalOption(g) {
-    const c = Store.client(g.clientId);
-    return `<option value="${g.id}">${esc(g.name)}${c ? ' (' + esc(c.name) + ')' : ''}</option>`;
-  }
-
-  // Options for a goal select: open goals (plus keepId, for an achieved goal a task already has).
-  function goalOptions(blankLabel, blankDisabled, keepId) {
-    const blank = `<option value="" ${blankDisabled ? 'disabled' : ''}>${esc(blankLabel)}</option>`;
-    const goals = Store.goals().filter(g => !g.achievedOn || g.id === keepId);
-    return blank + goals.map(goalOption).join('');
-  }
-
-  /* ---------- the deadline picker ---------- */
-
-  // Its own calendar with a row Herhalen. The hidden date field holds the value (.value the date,
-  // .dataset.rep the repeat 'n:u'); the button shows them. The calendar exists only while it is open.
-  const DK_PRESETS = [
-    ['', 'repeat.never'],
-    ['1:w', 'repeat.week'],
-    ['2:w', 'repeat.two_weeks'],
-    ['1:m', 'repeat.month'],
-    ['3:m', 'repeat.three_months']
-  ];
-  const DK_YEARS_BACK = 1, DK_YEARS = 9;   // the year list: last year and the eight after it
-  const DK_CUSTOM_COUNT = 2, DK_CUSTOM_UNIT = 'w';   // where Aangepast starts when nothing is chosen yet
-  const DK_MAX_COUNT = 99;                 // "every 99 months" is already far beyond any real use
-  const DK_MONTH_NAME_MAX = 7;             // longer month names are shortened, so the bar fits
-  const MONTHS_IN_YEAR = 12, DAYS_IN_WEEK = 7;
-  let dk = null;
-
-  function dkText(i) {
-    if (!i.value) return `<span class="dkph">${t('deadline.pick')}</span>`;
-    const rep = i.dataset.rep;
-    const repeat = rep ? `<span class="dkrep">${REP_ICON} ${repText(rep)}</span>` : '';
-    return `<span>${fmtDay(i.value)} ${M.parseD(i.value).getUTCFullYear()}</span>${repeat}`;
-  }
-
-  function dxSync(i) {
-    const w = i.parentElement;
-    w.classList.toggle('has', !!i.value);
-    w.querySelector('.dkf').innerHTML = dkText(i);
-    i.dispatchEvent(new Event('dxsync', { bubbles: true }));
-  }
-
-  function setDeadline(i, date, rep) {
-    i.value = date || '';
-    i.dataset.rep = date ? rep || '' : '';
-    dxSync(i);
-  }
-
-  function dkFieldButton(i) {
-    const field = document.createElement('button');
-    field.type = 'button';
-    field.className = 'dkf';
-    field.setAttribute('aria-haspopup', 'dialog');
-    field.addEventListener('click', e => {
-      e.preventDefault();
-      dkOpen(i);
-    });
-    return field;
-  }
-
-  function dkClearButton(i) {
-    const clear = document.createElement('button');
-    clear.type = 'button';
-    clear.className = 'dclr';
-    clear.textContent = '×';
-    clear.setAttribute('aria-label', t('deadline.clear_aria'));
-    clear.addEventListener('click', e => {
-      e.preventDefault();
-      setDeadline(i, '', '');
-    });
-    return clear;
-  }
-
-  function wrapDeadline(i) {
-    const w = document.createElement('span');
-    w.className = 'dwrap';
-    i.before(w);
-    w.appendChild(i);
-    i.hidden = true;
-    i.tabIndex = -1;
-    w.insertBefore(dkFieldButton(i), i);
-    w.appendChild(dkClearButton(i));
-    dxSync(i);
-  }
-
-  function dkClose() {
-    if (!dk) return false;
-    dk.bk.remove();
-    dk.pop.remove();
-    dk = null;
-    return true;
-  }
-
-  function dkState(i) {
-    const base = M.parseD(i.value || M.today()), rep = i.dataset.rep || '';
-    return {
-      i,
-      sel: i.value || '',
-      rep,
-      y: base.getUTCFullYear(),
-      m: base.getUTCMonth(),
-      custom: !!rep && !DK_PRESETS.some(p => p[0] === rep)
-    };
-  }
-
-  function dkOpen(i) {
-    dkClose();
-    const bk = document.createElement('div');
-    bk.className = 'dkbk';
-    const pop = document.createElement('div');
-    pop.className = 'dkpop';
-    pop.setAttribute('role', 'dialog');
-    pop.setAttribute('aria-label', t('deadline.aria'));
-    const host = i.closest('dialog') || document.body;
-    host.append(bk, pop);
-    dk = { st: dkState(i), bk, pop };
-    bk.addEventListener('click', dkClose);
-    pop.addEventListener('click', dkClick);
-    pop.addEventListener('change', dkChange);
-    pop.addEventListener('input', dkInput);
-    dkDraw();
-  }
-
-  const dkq = sel => dk.pop.querySelector(sel);
-
-  function dkMonthSelect(st) {
-    const monthName = k => {
-      const name = t('mo.' + k);
-      return name.length > DK_MONTH_NAME_MAX ? name.slice(0, 3) : name;
-    };
-    const option = k => `<option value="${k}" ${k === st.m ? 'selected' : ''}>${monthName(k)}</option>`;
-    const options = Array.from({ length: MONTHS_IN_YEAR }, (_, k) => option(k)).join('');
-    return `<select data-dkm aria-label="${t('deadline.month')}">${options}</select>`;
-  }
-
-  function dkYearSelect(st) {
-    const firstYear = M.parseD(M.today()).getUTCFullYear() - DK_YEARS_BACK;
-    const years = Array.from({ length: DK_YEARS }, (_, n) => firstYear + n);
-    if (!years.includes(st.y)) years.push(st.y);
-    const options = years.sort().map(y => `<option ${y === st.y ? 'selected' : ''}>${y}</option>`).join('');
-    return `<select data-dky aria-label="${t('deadline.year')}">${options}</select>`;
-  }
-
-  function dkWeekdayHeads() {
-    const weekStart = M.getWeekStart();
-    const head = k => `<span>${cap(t('wd.' + (weekStart + k) % DAYS_IN_WEEK))}</span>`;
-    return Array.from({ length: DAYS_IN_WEEK }, (_, k) => head(k)).join('');
-  }
-
-  function dkDayButton(ds, day, selected) {
-    const isSelected = ds === selected;
-    const classes = `dkd ${ds === M.today() ? 'today' : ''} ${isSelected ? 'sel' : ''}`;
-    const pressed = isSelected ? 'aria-pressed="true"' : '';
-    return `<button type="button" class="${classes}" data-dkd="${ds}" ${pressed}>${day}</button>`;
-  }
-
-  // Empty cells first, so the 1st lands under its weekday.
-  function dkDayCells({ y, m, sel }) {
-    const firstWeekday = new Date(Date.UTC(y, m, 1)).getUTCDay();
-    let cells = '<span></span>'.repeat((firstWeekday - M.getWeekStart() + DAYS_IN_WEEK) % DAYS_IN_WEEK);
-    const lastDay = M.daysIn(y, m);
-    for (let day = 1; day <= lastDay; day++) {
-      cells += dkDayButton(M.toDs(new Date(Date.UTC(y, m, day))), day, sel);
-    }
-    return cells;
-  }
-
-  // Repeating needs a date to count from, so without one the pills are off.
-  function dkPills(st) {
-    const disabled = !st.sel ? 'disabled' : '';
-    const pill = (value, on, label) =>
-      `<button type="button" class="dkpill ${on ? 'on' : ''}" data-dkr="${value}" ${disabled}>${label}</button>`;
-    const presets = DK_PRESETS.map(([value, key]) => pill(value, !st.custom && st.rep === value, t(key)));
-    return presets.join('') + pill('custom', st.custom, t('repeat.custom'));
-  }
-
-  function dkCustomRow(st) {
-    const p = M.parseRepeat(st.rep);
-    const count = p ? p.n : DK_CUSTOM_COUNT, chosenUnit = p ? p.u : DK_CUSTOM_UNIT;
-    const unitOption = u => `<option value="${u}" ${chosenUnit === u ? 'selected' : ''}>${t('unit.' + u)}</option>`;
-    return html`
-      <div class="dkcus">
-        <span>${t('repeat.every')}</span>
-        <input type="number" data-dkn min="1" max="${DK_MAX_COUNT}" value="${count}" aria-label="${t('repeat.count')}">
-        <select data-dku aria-label="${t('repeat.unit')}">${['d', 'w', 'm'].map(unitOption).join('')}</select>
-      </div>`;
-  }
-
-  function dkDraw() {
-    const { st, pop } = dk;
-    pop.innerHTML = html`
-      <div class="dkh">
-        <button type="button" data-dk="prev" aria-label="${t('deadline.prev')}">‹</button>
-        ${dkMonthSelect(st)}
-        ${dkYearSelect(st)}
-        <button type="button" data-dk="next" aria-label="${t('deadline.next')}">›</button>
-      </div>
-      <div class="dkw">${dkWeekdayHeads()}</div>
-      <div class="dkg">${dkDayCells(st)}</div>
-      <div class="dkl">${REP_ICON} ${t('repeat.label')}</div>
-      <div class="dkpills">${dkPills(st)}</div>
-      ${st.custom ? dkCustomRow(st) : ''}
-      <div class="dkbtns">
-        <button type="button" data-dk="clear">${t('deadline.clear')}</button>
-        <button type="button" class="primary" data-dk="ok">${t('deadline.ok')}</button>
-      </div>`;
-  }
-
-  function dkCommit() {
-    const { st } = dk;
-    setDeadline(st.i, st.sel, st.rep);
-    dkClose();
-  }
-
-  function dkChooseRepeat(st, choice) {
-    if (choice === 'custom') {
-      st.custom = true;
-      if (!st.rep) st.rep = `${DK_CUSTOM_COUNT}:${DK_CUSTOM_UNIT}`;
-    } else {
-      st.custom = false;
-      st.rep = choice;
-    }
-  }
-
-  function dkStepMonth(st, step) {
-    st.m += step;
-    if (st.m < 0) { st.m = MONTHS_IN_YEAR - 1; st.y--; }
-    if (st.m >= MONTHS_IN_YEAR) { st.m = 0; st.y++; }
-  }
-
-  function dkClick(e) {
-    const { st } = dk, b = e.target.closest('button');
-    if (!b) return;
-    if (b.dataset.dkd) {
-      st.sel = b.dataset.dkd;
-      dkDraw();
-      return;
-    }
-    if (b.dataset.dkr !== undefined) {
-      dkChooseRepeat(st, b.dataset.dkr);
-      dkDraw();
-      return;
-    }
-    const action = b.dataset.dk;
-    if (action === 'prev' || action === 'next') {
-      dkStepMonth(st, action === 'next' ? 1 : -1);
-      dkDraw();
-    } else if (action === 'clear') {
-      st.sel = '';
-      st.rep = '';
-      dkCommit();
-    } else if (action === 'ok') {
-      dkCommit();
-    }
-  }
-
-  function dkChange(e) {
-    const { st } = dk, d = e.target.dataset;
-    if (d.dkm !== undefined) { st.m = +e.target.value; dkDraw(); }
-    else if (d.dky !== undefined) { st.y = +e.target.value; dkDraw(); }
-    else if (d.dku !== undefined) dkInput();
-  }
-
-  function dkInput() {
-    const { st } = dk, countField = dkq('[data-dkn]'), unitField = dkq('[data-dku]');
-    if (!countField || !unitField) return;
-    const count = Math.max(1, Math.min(DK_MAX_COUNT, Math.round(+countField.value) || 1));
-    st.rep = `${count}:${unitField.value}`;
-  }
-
-  onEscape(dkClose);   // registered first: the innermost pop-up
 
   /* ---------- toast, problems at their field, saving ---------- */
 
@@ -825,15 +317,13 @@ const UI = (() => {
   }
 
   return {
-    html, MODE,
+    html, MODE, NO_FILTER, FULLSCREEN_POPUP_QUERY,
     $, esc, cap, tn, PHONE, View,
     wd, wdLong, mshort, mname, dnum, fmtSp, fmtDay, fmt, span,
     lightOf, pstyle, uname, avatar, goalStyle, taskStyle, hueStyle, hueColour, goalDot, NOGOAL,
     REP_ICON, repText, metaLine, taskCard, chk, whoHtml,
-    onEscape, dialog,
-    msRender, msClose, initFilters, passes, filterCount, clearFilter, pruneFilter,
-    gpBuild, initGoalPicker, goalOptions,
-    wrapDeadline, setDeadline,
+    byClient,
+    onEscape, onWindowClose, dialog,
     toast, needField, showProblems, act
   };
 })();

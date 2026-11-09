@@ -44,11 +44,16 @@ One file per task; each file starts with what it is responsible for.
 | `tables.js` | The names of the database tables, for the Store and every data layer |
 | `data-local.js`, `data-service.js` | Storage in this browser; picking the data layer |
 | `store.js` | Data in memory; every action as one save with its undo |
-| `ui.js` | Shared pieces: cards, windows, the Escape key, pickers, toast |
+| `ui.js` | Shared pieces: cards, windows, the Escape key, toast |
+| `filter-picker.js`, `goal-picker.js`, `deadline-picker.js` | The fold-out lists to choose filters, a goal, a deadline with its repeat |
 | `figures.js` | The small figures that sometimes walk by when a task is checked off |
 | `drag.js` | Dragging a task: one handler for the page, each screen registers its drop zones |
-| `calendar.js`, `tasks.js` | Taken page: calendar views; the task lists and form |
-| `goals.js`, `inbox.js`, `manage.js` | Doelen, Inbox, Beheer |
+| `calendar.js` | Taken page, right: the view table, the bar, dropping, swiping |
+| `calendar-week.js`, `calendar-period.js`, `calendar-list.js`, `calendar-card.js` | The day and week views, the work-period view, the list view, the open task card |
+| `tasks.js` | Taken page, left: the task lists and the form |
+| `goals.js`, `inbox.js` | Doelen, Inbox |
+| `manage.js` | The Beheer window: tabs and drawing |
+| `manage-blocks.js`, `manage-period.js`, `manage-other.js` | The tabs Werkblokken and Werkperiode; the seven small tabs |
 | `agenda.js`, `export.js` | Meetings from the agenda link; backup and analysis export |
 | `app.js` | Starting, version check, pages, reloading at natural moments |
 

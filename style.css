@@ -680,6 +680,12 @@ input,textarea,select{color:var(--text)}
 .login input{width:100%;box-sizing:border-box;padding:8px 10px;font-size:15px;border-radius:8px}
 @media (max-width:700px){ .login input{font-size:16px} }   /* onder 16px zoomt een gsm in op het veld */
 .login button{width:100%;padding:8px 10px;font-size:15px}
+.login .pw{position:relative;display:block}
+.login .pw input{padding-right:42px}
+.login .pw button{position:absolute;top:0;right:0;bottom:0;width:40px;padding:0;display:flex;align-items:center;justify-content:center;background:none;border:none;box-shadow:none;color:var(--muted)}
+.login .pw button:hover{color:var(--text);background:none}
+.login .pw .eye-off,.login .pw button.shown .eye-open{display:none}
+.login .pw button.shown .eye-off{display:block}
 .login-error{color:var(--warn-ink);min-height:1.4em;margin:12px 0 0;font-size:14px}
 .local-note{background:var(--warn-bg);color:var(--warn-ink);font-size:13px;text-align:center;padding:5px 16px}
 .err{color:var(--danger)}

@@ -110,9 +110,17 @@ const App = (() => {
     return false;
   }
 
+  function setPasswordShown(shown) {
+    const label = t(shown ? 'login.hide_password' : 'login.show_password');
+    $('loginPassword').type = shown ? 'text' : 'password';
+    $('loginEye').classList.toggle('shown', shown);
+    $('loginEye').title = label;
+    $('loginEye').setAttribute('aria-label', label);
+  }
   function showLogin() {
     $('loading').hidden = true;
     $('loginScreen').hidden = false;
+    setPasswordShown(false);
     $('loginEmail').focus();
   }
   async function login(e) {
@@ -124,6 +132,7 @@ const App = (() => {
     try {
       await DataService.signIn(email, password);
       $('loginScreen').hidden = true;
+      setPasswordShown(false);   // never left readable behind the app
       await start();
     } catch (err) {
       console.error(err);
@@ -186,6 +195,7 @@ const App = (() => {
     $('localNote').hidden = DataService.needsLogin;
     $('versionReload').onclick = () => location.reload();
     $('loginScreen').onsubmit = login;
+    $('loginEye').onclick = () => setPasswordShown($('loginPassword').type === 'password');
     $('btnLogout').hidden = !DataService.needsLogin;
     $('btnLogout').onclick = logout;
     $('accessLogout').onclick = logout;

@@ -11,6 +11,8 @@ const NL = {
   'app.unknown_address': 'JAPT is niet ingesteld voor het adres {host}. Voeg het toe in deployment.js.',
   'login.email': 'E-mail',
   'login.password': 'Wachtwoord',
+  'login.show_password': 'Wachtwoord tonen',
+  'login.hide_password': 'Wachtwoord verbergen',
   'login.button': 'Aanmelden',
   'login.logout': 'Afmelden',
   'login.fill_in': 'Vul je e-mail en wachtwoord in.',

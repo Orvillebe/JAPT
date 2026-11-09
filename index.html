@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=0.5.19">
+<link rel="stylesheet" href="style.css?v=0.5.20">
 <!-- The look is chosen per device in Beheer; set it before the page draws, so it never flashes. -->
 <script>try { var th = localStorage.getItem('japt_theme'); if (th === 'orville' || th === 'neutral') document.documentElement.dataset.theme = th; } catch (e) {}</script>
 </head>
@@ -22,7 +22,7 @@
 <form class="screen login" id="loginScreen" hidden>
   <h1 data-i18n="app.title"></h1>
   <label class="f"><span class="fl" data-i18n="login.email"></span><input type="email" id="loginEmail" autocomplete="email"></label>
-  <label class="f"><span class="fl" data-i18n="login.password"></span><input type="password" id="loginPassword" autocomplete="current-password"></label>
+  <label class="f"><span class="fl" data-i18n="login.password"></span><span class="pw"><input type="password" id="loginPassword" autocomplete="current-password"><button type="button" id="loginEye"><svg class="eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4"/><path d="M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a10.3 10.3 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></button></span></label>
   <button type="submit" class="primary" id="loginBtn" data-i18n="login.button"></button>
   <p class="login-error" id="loginError" role="alert"></p>
 </form>
@@ -149,39 +149,39 @@
 <script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js" integrity="sha384-6SU9o/kopjziIukGhxSpfo75dojAj0O1JWZ+Z/2FdC6rLs6pJvDmRntnUdMS7ht2" crossorigin="anonymous"></script>
 <!-- Every local file carries the app version (?v=), so after a release the browser fetches the new files
      instead of mixing cached old ones with new ones. tests/release.test.js checks that they match. -->
-<script src="version.js?v=0.5.19"></script>
-<script src="deployment.js?v=0.5.19"></script>
-<script src="config.js?v=0.5.19"></script>
-<script src="i18n/nl.js?v=0.5.19"></script>
-<script src="i18n/i18n.js?v=0.5.19"></script>
-<script src="model.js?v=0.5.19"></script>
-<script src="id.js?v=0.5.19"></script>
-<script src="tables.js?v=0.5.19"></script>
-<script src="data-local.js?v=0.5.19"></script>
-<script src="data-supabase.js?v=0.5.19"></script>
-<script src="data-service.js?v=0.5.19"></script>
-<script src="store.js?v=0.5.19"></script>
-<script src="ui.js?v=0.5.19"></script>
-<script src="figures.js?v=0.5.19"></script>
-<script src="filter-picker.js?v=0.5.19"></script>
-<script src="goal-picker.js?v=0.5.19"></script>
-<script src="deadline-picker.js?v=0.5.19"></script>
-<script src="drag.js?v=0.5.19"></script>
-<script src="agenda.js?v=0.5.19"></script>
-<script src="calendar-views.js?v=0.5.19"></script>
-<script src="calendar-week.js?v=0.5.19"></script>
-<script src="calendar-period.js?v=0.5.19"></script>
-<script src="calendar-list.js?v=0.5.19"></script>
-<script src="calendar-card.js?v=0.5.19"></script>
-<script src="calendar.js?v=0.5.19"></script>
-<script src="tasks.js?v=0.5.19"></script>
-<script src="goals.js?v=0.5.19"></script>
-<script src="inbox.js?v=0.5.19"></script>
-<script src="manage-blocks.js?v=0.5.19"></script>
-<script src="manage-period.js?v=0.5.19"></script>
-<script src="manage-other.js?v=0.5.19"></script>
-<script src="manage.js?v=0.5.19"></script>
-<script src="export.js?v=0.5.19"></script>
-<script src="app.js?v=0.5.19"></script>
+<script src="version.js?v=0.5.20"></script>
+<script src="deployment.js?v=0.5.20"></script>
+<script src="config.js?v=0.5.20"></script>
+<script src="i18n/nl.js?v=0.5.20"></script>
+<script src="i18n/i18n.js?v=0.5.20"></script>
+<script src="model.js?v=0.5.20"></script>
+<script src="id.js?v=0.5.20"></script>
+<script src="tables.js?v=0.5.20"></script>
+<script src="data-local.js?v=0.5.20"></script>
+<script src="data-supabase.js?v=0.5.20"></script>
+<script src="data-service.js?v=0.5.20"></script>
+<script src="store.js?v=0.5.20"></script>
+<script src="ui.js?v=0.5.20"></script>
+<script src="figures.js?v=0.5.20"></script>
+<script src="filter-picker.js?v=0.5.20"></script>
+<script src="goal-picker.js?v=0.5.20"></script>
+<script src="deadline-picker.js?v=0.5.20"></script>
+<script src="drag.js?v=0.5.20"></script>
+<script src="agenda.js?v=0.5.20"></script>
+<script src="calendar-views.js?v=0.5.20"></script>
+<script src="calendar-week.js?v=0.5.20"></script>
+<script src="calendar-period.js?v=0.5.20"></script>
+<script src="calendar-list.js?v=0.5.20"></script>
+<script src="calendar-card.js?v=0.5.20"></script>
+<script src="calendar.js?v=0.5.20"></script>
+<script src="tasks.js?v=0.5.20"></script>
+<script src="goals.js?v=0.5.20"></script>
+<script src="inbox.js?v=0.5.20"></script>
+<script src="manage-blocks.js?v=0.5.20"></script>
+<script src="manage-period.js?v=0.5.20"></script>
+<script src="manage-other.js?v=0.5.20"></script>
+<script src="manage.js?v=0.5.20"></script>
+<script src="export.js?v=0.5.20"></script>
+<script src="app.js?v=0.5.20"></script>
 </body>
 </html>

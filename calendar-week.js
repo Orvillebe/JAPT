@@ -201,16 +201,12 @@ const CalendarWeek = (() => {
   // Blocks where the tasks don't fit get compact rows instead of a scrollbar.
   const overflows = list => list.scrollHeight > list.clientHeight + ROUNDING_TOLERANCE_PX;
 
-  // More tasks than room: smaller cards first, each piece for itself. A piece between meetings then also gives
-  // up its times (they stay in the tooltip), which makes room for one task more.
-  function fitPiece(piece, mayDropTimes = false) {
+  // More tasks than room: smaller cards first, each piece for itself.
+  function fitPiece(piece) {
     const list = piece.querySelector('.list');
     if (!list || !overflows(list)) return;
     piece.classList.add('snug');
-    if (!overflows(list)) return;
-    piece.classList.remove('snug');
-    piece.classList.add('tight');
-    if (mayDropTimes && overflows(list)) piece.classList.add('short-now');
+    if (overflows(list)) { piece.classList.remove('snug'); piece.classList.add('tight'); }
   }
   // Tasks fill the pieces of a block from the top. A piece first makes its cards smaller; only what then still
   // doesn't fit moves on to the next piece, in order. A task never leaves a piece on its own.
@@ -220,12 +216,11 @@ const CalendarWeek = (() => {
     pieces.forEach((piece, i) => {
       const list = lists[i], next = lists[i + 1];
       if (list.querySelector('.chip')) list.querySelectorAll('.empty').forEach(el => el.remove());
-      piece.title = piece.querySelector('.bh').textContent;
-      fitPiece(piece, true);
+      fitPiece(piece);
       while (next && overflows(list) && list.querySelectorAll('.chip').length > 1) {
         next.prepend(list.lastElementChild);
-        piece.classList.remove('snug', 'tight', 'short-now');
-        fitPiece(piece, true);
+        piece.classList.remove('snug', 'tight');
+        fitPiece(piece);
       }
     });
     lists.filter(list => !list.children.length).forEach(list => { list.innerHTML = dropHere(); });
@@ -234,7 +229,7 @@ const CalendarWeek = (() => {
   function fitBlocks() {
     const byPlace = new Map();
     document.querySelectorAll('#body .block').forEach(piece => {
-      piece.classList.remove('tight', 'snug', 'short-now');
+      piece.classList.remove('tight', 'snug');
       if (!byPlace.has(piece.dataset.place)) byPlace.set(piece.dataset.place, []);
       byPlace.get(piece.dataset.place).push(piece);
     });

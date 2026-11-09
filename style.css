@@ -508,6 +508,8 @@ dialog.gvw.editing{overflow:visible}
 .block.snug .chip .ct{align-items:center}
 .block.snug .chip .t{font-size:13px}
 .block.snug .chip .wd{width:18px;height:18px;font-size:9.5px}
+.block.tight{padding:3px 6px;gap:2px}   /* vol: minder witruimte, zodat er onder de uren een taak meer past */
+.block.tight .list{gap:3px}
 .block.tight .chip{padding:4px 8px;gap:0}
 .block.tight .chip .meta{display:none}
 .block.tight .chip .x{display:none}
@@ -689,8 +691,8 @@ input,textarea,select{color:var(--text)}
 .dragging-any .meeting{pointer-events:none}   /* slepen gaat door de meeting heen naar het blok eronder */
 
 .block.noroom{background:transparent}
-.block.short,.block.short-now{padding:3px 6px}
-.block.short .bh,.block.short-now .bh{display:none}   /* een halfuur: de plaats gaat naar de taak, de uren staan in de tooltip */
+.block.short{padding:3px 6px}
+.block.short .bh{display:none}   /* een halfuur: de plaats gaat naar de taak, de uren staan in de tooltip */
 .covered{position:absolute;z-index:3;right:6px;bottom:6px;padding:1px 8px;border-radius:9px;background:var(--panel);border:1px solid var(--line);font-size:12px;color:var(--block-ink)}   /* boven de meeting: de taken blijven ingepland */
 
 /* Beheer: de tabbladen als menu links, zodat negen woorden niet over twee rijen breken */

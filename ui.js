@@ -38,7 +38,7 @@ const UI = (() => {
   const View = (() => {
     const defaults = {
       page: 'tasks', mode: 'workweek', groupBy: 'none', filter: NO_FILTER(),
-      fold: {}, sbHidden: false, showAchieved: false, ibTab: 'add'
+      fold: {}, sbHidden: !PHONE(), showAchieved: false, ibTab: 'add'
     };
     let view = defaults;
     try {

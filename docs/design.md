@@ -269,6 +269,7 @@ Decided on 2026-11-09: one shared database and one version of the software for e
 - **Views:** Taken (calendar with Dag, Werkweek, Week, Werkperiode, Lijst), Doelen, Inbox. Beheer is a dialog with Werkblokken, Werkperiode, Deadlines, Week, Gebruikers, and (new) Agenda (the agenda link), Prullenbak, Weergave (theme), Back-up with the analysis export, and the app and database version.
 - **Phone:** opens on the Inbox; Taken shows the Lijst. Swiping changes day or week. Week views ask to turn the phone (no forced landscape).
 - `#inbox` in the address opens the Inbox, for a bookmark on the way.
+- **The task list on the left starts closed** on a computer, so the calendar has the room; `Taken` opens it and the choice is remembered per device. On a phone it sits under the calendar and stays as it was.
 - Checking off sometimes shows a small figure (30 %, never with reduced motion). Kept as in the mockup.
 - **Assumption:** the mockup's screens, labels and behaviour are the specification. The code is rebuilt cleanly, the CSS can largely be reused.
 

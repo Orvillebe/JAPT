@@ -24,6 +24,7 @@ const NL = {
   'view.inbox': 'Inbox',
   'manage.button': 'Beheer',
   'side.hide': 'Takenlijst verbergen',
+  'side.hide_short': 'Verbergen',
   'side.show': 'Takenlijst tonen',
 
   'list.open': 'Nog niet ingepland',

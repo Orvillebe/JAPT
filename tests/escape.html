@@ -189,9 +189,9 @@
       if (!(await freshFiles())) throw new Error('no files found in index.html');
       for (const size of [WIDE, PHONE]) {
         const label = size === WIDE ? 'breed' : 'telefoon';
-        await openApp(size, poisonedData());
+        await openApp(size, poisonedData(), { sbHidden: false });   // the task list is closed by default
         await runSteps(label, STEPS, results);
-        await openApp(size, poisonedData({ calendarUrl: 'https://agenda.invalid/' + POISON }));
+        await openApp(size, poisonedData({ calendarUrl: 'https://agenda.invalid/' + POISON }), { sbHidden: false });
         await runSteps(label, LINK_STEPS, results);
       }
     } catch (e) {

@@ -302,10 +302,17 @@ const UI = (() => {
     }
   }
 
+  // A save refused because someone else changed the row may in fact be a delete: after the reload the row
+  // is gone. Then the message about a change would be wrong, so say what really happened.
+  function sayIfGone(row, goneKey) {
+    if (!row) toast(t(goneKey));
+    return !row;
+  }
+
   // After a form could not save: when someone else changed it meanwhile, say what now. Returns the version
   // the form counts as seen, so saving again is a conscious choice for your own version.
-  function afterFormConflict(seenAt, row) {
-    if (!row || row.changedAt === seenAt) return seenAt;
+  function afterFormConflict(seenAt, row, goneKey) {
+    if (sayIfGone(row, goneKey) || row.changedAt === seenAt) return seenAt;
     toast(t('form.changed_meanwhile'));
     return row.changedAt;
   }
@@ -332,6 +339,6 @@ const UI = (() => {
     REP_ICON, repText, metaLine, taskCard, chk, whoHtml,
     byClient,
     onEscape, onWindowClose, dialog,
-    toast, needField, showProblems, act, afterFormConflict
+    toast, needField, showProblems, act, afterFormConflict, sayIfGone
   };
 })();

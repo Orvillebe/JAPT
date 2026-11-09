@@ -346,7 +346,7 @@ const Goals = (() => {
     state.busy = true;
     const res = await UI.act(() => Store.deleteGoal(state.id, how));
     state.busy = false;
-    if (!res) return;
+    if (!res) { UI.sayIfGone(Store.goal(state.id), 'form.gone_goal'); return; }
     state.onGone();
     UI.toast(t('toast.to_bin', { title: state.goal.name }), res.undo);
   }
@@ -381,7 +381,7 @@ const Goals = (() => {
     const res = await UI.act(() => (g ? Store.updateGoal(id, fields, state.seenAt) : Store.createGoal(fields)));
     state.busy = false;
     if (res) state.onDone();
-    else if (g) state.seenAt = UI.afterFormConflict(state.seenAt, Store.goal(id));
+    else if (g) state.seenAt = UI.afterFormConflict(state.seenAt, Store.goal(id), 'form.gone_goal');
   }
 
   // The form, drawn fresh into host. onDone: saved or cancelled; onGone: the goal was deleted.
@@ -442,7 +442,7 @@ const Goals = (() => {
       const res = await UI.act(() => Store.renameClient(id, v, seenAt));
       busy = false;
       if (res) dlg.close();
-      else seenAt = UI.afterFormConflict(seenAt, Store.client(id));
+      else seenAt = UI.afterFormConflict(seenAt, Store.client(id), 'form.gone_client');
     };
     nameEl.focus(); nameEl.select();
   }

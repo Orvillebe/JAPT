@@ -296,7 +296,7 @@ const Tasks = (() => {
     ));
     state.busy = false;
     if (!res) {   // not saved: the form stays as you left it
-      if (k) state.seenAt = UI.afterFormConflict(state.seenAt, Store.task(id));
+      if (k) state.seenAt = UI.afterFormConflict(state.seenAt, Store.task(id), 'form.gone_task');
       return;
     }
     if (!k) View.fold[stage] = false;   // the list the new task goes into opens
@@ -317,7 +317,7 @@ const Tasks = (() => {
     state.busy = true;
     const res = await UI.act(() => Store.binTask(id));
     state.busy = false;
-    if (!res) return;
+    if (!res) { UI.sayIfGone(Store.task(id), 'form.gone_task'); return; }
     state.dlg.close();
     UI.toast(t('toast.to_bin', { title: k.title }), res.undo);
   }

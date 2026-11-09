@@ -178,4 +178,4 @@ Not built, but prepared for. Each can be added without changing the data that ex
 
 ## License
 
-MIT with the Commons Clause, see [`LICENSE`](LICENSE): free to use and change, not to sell.
+MIT with the Commons Clause: you may use, copy, change and share JAPT freely, but selling it (including a paid product or service built mainly on it) requires written permission from Orville. See `LICENSE`.

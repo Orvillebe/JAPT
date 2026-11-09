@@ -378,9 +378,10 @@ const Goals = (() => {
     };
     if (UI.showProblems(Store.goalProblems(fields), { name: nameEl })) return;
     state.busy = true;
-    const res = await UI.act(() => (g ? Store.updateGoal(id, fields) : Store.createGoal(fields)));
+    const res = await UI.act(() => (g ? Store.updateGoal(id, fields, state.seenAt) : Store.createGoal(fields)));
     state.busy = false;
     if (res) state.onDone();
+    else if (g) state.seenAt = UI.afterFormConflict(state.seenAt, Store.goal(id));
   }
 
   // The form, drawn fresh into host. onDone: saved or cancelled; onGone: the goal was deleted.
@@ -390,6 +391,7 @@ const Goals = (() => {
     const f = host.querySelector('form'), q = sel => f.querySelector(sel);
     const state = {
       id, goal: g, q, onDone, onGone,
+      seenAt: g ? g.changedAt : undefined,   // the version this form shows
       nameEl: q('[name=name]'), clientEl: q('[name=client]'),
       hue: g ? M.goalHue(g) : M.freshHue(Store.goals()),
       delArmed: false, delHow: null, busy: false
@@ -426,6 +428,7 @@ const Goals = (() => {
 
   function openClient(id) {
     const c = Store.client(id); if (!c) return;
+    let seenAt = c.changedAt;   // the version this window shows
     const dlg = UI.dialog();
     dlg.innerHTML = clientFormHtml(c);
     const f = dlg.querySelector('form'), nameEl = f.querySelector('[name=name]');
@@ -436,9 +439,10 @@ const Goals = (() => {
       const v = nameEl.value.trim();
       if (UI.showProblems(Store.clientProblems(id, v), { name: nameEl })) return;
       busy = true;
-      const res = await UI.act(() => Store.renameClient(id, v));
+      const res = await UI.act(() => Store.renameClient(id, v, seenAt));
       busy = false;
       if (res) dlg.close();
+      else seenAt = UI.afterFormConflict(seenAt, Store.client(id));
     };
     nameEl.focus(); nameEl.select();
   }

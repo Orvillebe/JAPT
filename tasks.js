@@ -291,9 +291,14 @@ const Tasks = (() => {
     const stage = k ? k.stage : q('[name=list]').value;
     if (UI.showProblems(Store.taskProblems(fields, stage), { title: state.titleEl, goal: state.goalEl })) return;
     state.busy = true;
-    const res = await UI.act(() => (k ? Store.updateTask(id, fields) : Store.createTask({ ...fields, stage })));
+    const res = await UI.act(() => (
+      k ? Store.updateTask(id, fields, state.seenAt) : Store.createTask({ ...fields, stage })
+    ));
     state.busy = false;
-    if (!res) return;   // not saved: the form stays as you left it
+    if (!res) {   // not saved: the form stays as you left it
+      if (k) state.seenAt = UI.afterFormConflict(state.seenAt, Store.task(id));
+      return;
+    }
     if (!k) View.fold[stage] = false;   // the list the new task goes into opens
     state.dlg.close();
   }
@@ -326,6 +331,7 @@ const Tasks = (() => {
     dlg.innerHTML = formHtml(k);
     const f = dlg.querySelector('form'), q = sel => f.querySelector(sel);
     const state = {
+      seenAt: k ? k.changedAt : undefined,   // the version this form shows
       id, task: k, dlg, q,
       titleEl: q('[name=title]'), goalEl: q('[name=goal]'), deadlineEl: q('[name=deadline]'),
       who: k ? Store.whoOf(id).slice() : [],

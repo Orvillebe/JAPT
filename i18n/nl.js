@@ -25,6 +25,7 @@ const NL = {
   'manage.button': 'Beheer',
   'side.hide': 'Takenlijst verbergen',
   'side.hide_short': 'Verbergen',
+  'form.changed_meanwhile': 'Iemand anders wijzigde dit intussen. Bewaar opnieuw om jouw versie te houden, of annuleer.',
   'side.show': 'Takenlijst tonen',
 
   'list.open': 'Nog niet ingepland',

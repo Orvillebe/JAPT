@@ -65,24 +65,73 @@ const Store = (() => {
     else rows.push(row);
   }
 
+  // The opposites in reverse order, each expecting the row as this save left it, so an undo never
+  // overwrites what someone changed since. A save changes a row once (moveToList folds its updates).
+  function guardedUndo(opposites, stored) {
+    return opposites
+      .map((back, i) => (
+        back && back.op !== 'insert' && stored[i] ? { ...back, ifChangedAt: stored[i].changedAt } : back
+      ))
+      .filter(Boolean)
+      .reverse();
+  }
+
+  const bringsBackClient = o => o.table === 'clients' && o.fields && o.fields.deletedAt === null;
+  // A client coming out of the Bin while a client with that name now exists would make two: it stays in
+  // the Bin and its goals go to the existing one. bin: what is in the Bin.
+  function keepClientNamesUnique(ops, bin) {
+    const clash = new Map();   // id in the Bin -> id of the existing client
+    ops.filter(bringsBackClient).forEach(o => {
+      const binned = bin.clients.find(c => c.id === o.id), existing = binned && clientNamed(binned.name);
+      if (existing && existing.id !== o.id) clash.set(o.id, existing.id);
+    });
+    if (!clash.size) return ops;
+    const clientOf = o => {
+      if (o.fields.clientId !== undefined) return o.fields.clientId;
+      return (bin.goals.find(g => g.id === o.id) || {}).clientId;
+    };
+    return ops
+      .filter(o => !(o.table === 'clients' && clash.has(o.id)))
+      .map(o => (o.table === 'goals' && o.fields && clash.has(clientOf(o))
+        ? { ...o, fields: { ...o.fields, clientId: clash.get(clientOf(o)) } }
+        : o));
+  }
+  // The Bin is only read when this undo really brings a client back.
+  async function withoutClientClash(ops) {
+    return ops.some(bringsBackClient) ? keepClientNamesUnique(ops, await DataService.loadBin()) : ops;
+  }
+
   // Save ops as one batch and bring memory in line with what was stored. Returns the undo.
   async function apply(ops) {
     ops = ops.filter(Boolean);
     if (!ops.length) return async () => {};
     const inverse = [];
-    for (const o of ops) { const back = oppositeOf(o); if (back) inverse.unshift(back); }
+    const opposites = ops.map(oppositeOf);
     const stored = await DataService.batch(ops);
     ops.forEach((o, i) => followInMemory(o, stored[i]));
     changed();
+    const undoOps = guardedUndo(opposites, stored);
     let undone = false;
-    return async () => { if (undone) return; undone = true; await apply(inverse); };
+    return async () => {
+      if (undone) return;
+      undone = true;
+      try {
+        await apply(await withoutClientClash(undoOps));
+      } catch (e) {
+        undone = false;   // not undone: it can be tried again
+        throw e;
+      }
+    };
   }
 
   const ins = (table, row) => ({ op: 'insert', table, row: { id: newId(), ...row } });
-  // An update expects the row as it was loaded (docs/design.md, Working at the same time).
-  const upd = (table, id, fields) => {
+  // An update expects the row as it was loaded, or, from a form, as the form showed it (seenAt):
+  // a reload while a form is open must not make the form's older values count as up to date
+  // (docs/design.md, Working at the same time).
+  const upd = (table, id, fields, seenAt) => {
     const r = find(table, id);
-    return { op: 'update', table, id, fields, ifChangedAt: r ? r.changedAt : undefined };
+    const ifChangedAt = seenAt !== undefined ? seenAt : r ? r.changedAt : undefined;
+    return { op: 'update', table, id, fields, ifChangedAt };
   };
   const del = (table, id) => ({ op: 'remove', table, id });
   const settingOp = (key, value) => ({ op: 'upsert', table: 'app_settings', id: key, fields: { value } });
@@ -282,11 +331,11 @@ const Store = (() => {
     const row = taskRow({ title, note, goalId, stage, deadline, repeat });
     return run({ ops: [{ op: 'insert', table: 'tasks', row }, ...whoOps(row.id, who)] });
   }
-  async function updateTask(id, { title, note, goalId, who, deadline, repeat }) {
+  async function updateTask(id, { title, note, goalId, who, deadline, repeat }, seenAt) {
     const k = task(id);
     refuse(taskProblems({ title, goalId }, k.stage));
     const fields = { title, note, goalId, deadline, repeat: deadline ? repeat : null };
-    const ops = [upd('tasks', id, fields), ...whoOps(id, who)];
+    const ops = [upd('tasks', id, fields, seenAt), ...whoOps(id, who)];
     // A task moved into an achieved goal reopens that goal.
     const newGoal = goalId !== k.goalId && goal(goalId);
     if (newGoal && newGoal.achievedOn) ops.push(upd('goals', goalId, { achievedOn: null }));
@@ -420,10 +469,10 @@ const Store = (() => {
     const c = clientOps(clientName);
     return run({ ops: [...c.ops, ins('goals', { name, note, clientId: c.clientId, hue, achievedOn: null })] });
   }
-  async function updateGoal(id, { name, note, clientName, hue }) {
+  async function updateGoal(id, { name, note, clientName, hue }, seenAt) {
     refuse(goalProblems({ name }));
     const c = clientOps(clientName), g = goal(id);
-    const ops = [...c.ops, upd('goals', id, { name, note, clientId: c.clientId, hue })];
+    const ops = [...c.ops, upd('goals', id, { name, note, clientId: c.clientId, hue }, seenAt)];
     if (g.clientId && g.clientId !== c.clientId && isLastGoalOfClient(g)) {
       ops.push(binOp('clients', g.clientId, newId(), nowIso()));   // its last goal moved to another client
     }
@@ -453,9 +502,9 @@ const Store = (() => {
     if (g.clientId && isLastGoalOfClient(g)) ops.push(binOp('clients', g.clientId, group, at));
     return run({ ops });
   }
-  async function renameClient(id, name) {
+  async function renameClient(id, name, seenAt) {
     refuse(clientProblems(id, name));
-    return run({ ops: [upd('clients', id, { name: name.trim() })] });
+    return run({ ops: [upd('clients', id, { name: name.trim() }, seenAt)] });
   }
 
   /* ---------- work blocks ---------- */
@@ -613,7 +662,9 @@ const Store = (() => {
       }
       ops.push({ op: 'update', table: t, id: r.id, fields: f });
     }
-    await DataService.batch(ops);
+    const unique = keepClientNamesUnique(ops, bin);
+    if (!unique.length) refuse({ name: 'client.exists' });   // only a client, and that name is taken again
+    await DataService.batch(unique);
     await reload();
   }
 

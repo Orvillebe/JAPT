@@ -108,6 +108,32 @@ test('memory follows what was stored', async () => {
   eq((await stored('tasks'))[0].createdBy, 'local-user');
 });
 
+test('a form saves against the version it opened, also after a reload', async () => {
+  const { S, DS, stored } = await app({ tasks: [task('a', { note: 'origineel' })] });
+  const seen = S.task('a').changedAt, form = { title: 'Mijn titel', note: 'origineel', goalId: 'g1', who: [], deadline: null, repeat: null };
+  await tick();
+  await DS.batch([{ op: 'update', table: 'tasks', id: 'a', fields: { note: 'van een collega' } }]);
+  await S.reload();                               // the tab came back while the form was open
+  await assert.rejects(S.updateTask('a', form, seen), e => e.code === 'conflict');
+  eq((await stored('tasks'))[0].note, 'van een collega');
+  await S.updateTask('a', form, S.task('a').changedAt);   // saving again, knowingly
+  eq((await stored('tasks'))[0].note, 'origineel');
+});
+test('the goal form and renaming a client save against the version they opened', async () => {
+  const { S, DS, stored } = await app();
+  const seenGoal = S.goal('g1').changedAt, seenClient = S.client('c1').changedAt;
+  await tick();
+  await DS.batch([
+    { op: 'update', table: 'goals', id: 'g1', fields: { note: 'van een collega' } },
+    { op: 'update', table: 'clients', id: 'c1', fields: { name: 'Hernoemd' } }
+  ]);
+  await S.reload();
+  await assert.rejects(S.updateGoal('g1', { name: 'Doel', note: '', clientName: 'Hernoemd', hue: 8 }, seenGoal), e => e.code === 'conflict');
+  await assert.rejects(S.renameClient('c1', 'Van mij', seenClient), e => e.code === 'conflict');
+  eq((await stored('goals'))[0].note, 'van een collega');
+  eq((await stored('clients'))[0].name, 'Hernoemd');
+});
+
 /* ---------- undo ---------- */
 
 test('undo takes a new task and its people away', async () => {
@@ -131,6 +157,44 @@ test('undo of a drag puts the task back in its old place', async () => {
   await undo();
   const ps = await stored('block_placements');
   eq(ps.map(p => [p.date, p.blockId]), [[NEXT_MONDAY, 'ma']]);
+});
+test('undo doesn\'t overwrite what someone changed since', async () => {
+  const { S, DS, stored } = await app({ tasks: [task('a')] });
+  const form = { title: 'Mijn wijziging', note: '', goalId: 'g1', who: [], deadline: null, repeat: null };
+  const { undo } = await S.updateTask('a', form);
+  await tick();
+  await DS.batch([{ op: 'update', table: 'tasks', id: 'a', fields: { title: 'Van een collega' } }]);
+  await S.reload();
+  await assert.rejects(undo(), e => e.code === 'conflict');
+  eq((await stored('tasks'))[0].title, 'Van een collega');
+});
+test('undo of a new task doesn\'t remove what someone changed since', async () => {
+  const { S, DS, stored } = await app();
+  const { undo } = await S.createTask({ title: 'Nieuw', goalId: 'g1' });
+  await tick();
+  const id = (await stored('tasks'))[0].id;
+  await DS.batch([{ op: 'update', table: 'tasks', id, fields: { title: 'Van een collega' } }]);
+  await S.reload();
+  await assert.rejects(undo(), e => e.code === 'conflict');
+  eq((await stored('tasks')).length, 1);
+});
+test('undo of a save with several changes puts everything back', async () => {
+  const { S, stored } = await app({ tasks: [task('a', { deadline: TODAY, repeat: '1:w' })], block_placements: [] });
+  const { undo } = await S.plan('a', { date: LAST_MONDAY, blockId: 'ma' });   // planned, checked off, next repeat
+  await tick();
+  await undo();
+  eq((await stored('tasks')).map(k => [k.id, k.doneOn]), [['a', null]]);
+  eq(await stored('block_placements'), []);
+});
+test('a failed undo can be tried again', async () => {
+  const { S, DS, stored } = await app();
+  const { undo } = await S.createTask({ title: 'Nieuw', goalId: 'g1' });
+  const batch = DS.batch;
+  DS.batch = async () => { throw new Error('offline'); };
+  await assert.rejects(undo());
+  DS.batch = batch;
+  await undo();
+  eq(await stored('tasks'), []);
 });
 test('undo works only once', async () => {
   const { S, stored } = await app();
@@ -397,6 +461,41 @@ test('a task whose goal is gone comes back in the Inbox', async () => {
   const group = bin.tasks[0].deleteGroup;
   await S.restoreGroup(group, bin);
   eq([S.task('a').stage, S.task('a').goalId, S.goal('g1')], ['inbox', null, null]);
+});
+test('restoring a goal when its client\'s name is taken again doesn\'t make two', async () => {
+  const { S } = await app();
+  await S.deleteGoal('g1', 'del');
+  await S.createGoal({ name: 'Nieuw', clientName: 'klant a', hue: 8 });
+  const existing = S.clientNamed('Klant A');
+  const bin = await S.loadBin();
+  await S.restoreGroup(bin.goals[0].deleteGroup, bin);
+  eq(S.clients().length, 1);
+  eq(S.goal('g1').clientId, existing.id);
+});
+test('undoing a delete when the client\'s name is taken again doesn\'t make two', async () => {
+  const { S } = await app();
+  const { undo } = await S.deleteGoal('g1', 'del');
+  await S.createGoal({ name: 'Nieuw', clientName: 'klant a', hue: 8 });
+  const existing = S.clientNamed('Klant A');
+  await undo();
+  eq(S.clients().length, 1);
+  eq(S.goal('g1').clientId, existing.id);
+});
+test('undoing a goal\'s move away from its last client keeps names unique too', async () => {
+  const { S } = await app();
+  const { undo } = await S.updateGoal('g1', { name: 'Doel een', note: '', clientName: '', hue: 8 });
+  await S.createGoal({ name: 'Nieuw', clientName: 'KLANT A', hue: 8 });
+  const existing = S.clientNamed('Klant A');
+  await undo();
+  eq(S.clients().length, 1);
+  eq(S.goal('g1').clientId, existing.id);
+});
+test('without a clash the client simply comes back', async () => {
+  const { S } = await app();
+  const { undo } = await S.deleteGoal('g1', 'del');
+  await undo();
+  eq(S.client('c1').name, 'Klant A');
+  eq(S.goal('g1').clientId, 'c1');
 });
 test('what stayed in the Bin too long is gone at the next start', async () => {
   const old = new Date(Date.now() - 40 * 864e5).toISOString(), recent = new Date(Date.now() - 2 * 864e5).toISOString();

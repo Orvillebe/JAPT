@@ -105,14 +105,28 @@ node tests/teams.test.js
 
 The first tests the rules (dates, blocks, work periods, lists, deadlines, repeats, order, filters). The second tests saving on the local data layer: all or nothing, undo, the check on changes by someone else, and the rules that need more than one row. The third checks that every file in `index.html` carries the app version, that no line of code is over 140 characters, and that the escape test has a step for every calendar view and Beheer tab.
 
-The fourth checks that a backup becomes a correct restore script. The fifth checks that the local data layer does what every data layer must do; `tests/contract.html?db=live` checks the same on the layer in `deployment.js`, from a browser where you are logged in. The sixth runs against the real database and proves that one team can't reach another team's data: on every table and on the save function, a login of team A tries to read, add, change and delete what is team B's. It needs two test logins (`japt-test-a@example.com` and `japt-test-b@example.com`), then `tools/teams-test-setup.sql` once, and their passwords in `tests/teams-test.env`, which stays out of git:
-
-```
-JAPT_TEST_A_PASSWORD=...
-JAPT_TEST_B_PASSWORD=...
-```
+The fourth checks that a backup becomes a correct restore script. The fifth checks that the local data layer does what every data layer must do; `tests/contract.html?db=live` checks the same on the layer in `deployment.js`, from a browser where you are logged in. The sixth runs against the real database and proves that one team can't reach another team's data: on every table and on the save function, a login of team A tries to read, add, change and delete what is team B's. It needs some setup first, see **Teams test** below.
 
 **Escape test, in the browser:** open `http://localhost:8766/tests/escape.html` and click **Test starten**. It fills every text people can type with a piece of HTML, opens every screen, window, picker and tab (wide and phone-sized), and fails when that text ever becomes real HTML in the page instead of text. That would let a task title run as code for everyone who sees it. Your local data is put aside and put back. Run it before every release; a new screen or window needs a new step in `STEPS`.
+
+**Teams test, against a real database:** run it after every new file in `migrations/` and before going live. The local version has no such rules, so this is the only proof that teams are kept apart.
+
+It puts two test teams in the database it tests. Once JAPT is in real use, don't do that in the real database: give the test its own Supabase project. While the real database holds more than one team, a new login no longer joins the only team by itself.
+
+1. Choose the database. For a separate one: make a new Supabase project and run every file in `migrations/` once, in number order.
+2. In **Authentication > Users**, make two logins with **Auto Confirm**: `japt-test-a@example.com` and `japt-test-b@example.com`, with passwords of your choice.
+3. In the **SQL Editor**, run `tools/teams-test-setup.sql` once.
+4. Make `tests/teams-test.env`, which stays out of git. The last two lines only for a separate project; without them the test uses the database in `deployment.js`. The key is the publishable key, never the secret one.
+
+   ```
+   JAPT_TEST_A_PASSWORD=...
+   JAPT_TEST_B_PASSWORD=...
+   JAPT_TEST_SUPABASE_URL=https://....supabase.co
+   JAPT_TEST_SUPABASE_KEY=...
+   ```
+
+5. Run `node tests/teams.test.js`. The first line says which database it tests. It removes its own test rows; the two teams and logins stay for the next run.
+6. Used a database that is also for real work? Run `tools/teams-test-remove.sql` in the SQL Editor afterwards. It removes the two test teams and logins. On a separate project, leave them.
 
 ## Code structure
 
@@ -142,7 +156,7 @@ One file per task; each file starts with what it is responsible for.
 | `agenda.js`, `export.js` | Meetings from the agenda link; backup and analysis export |
 | `app.js` | Starting, login, version check, pages, reloading at natural moments |
 | `migrations/` | The database, one numbered file per change |
-| `tools/` | `first-team.sql` for a new installation, `restore.html` to put a backup back, `teams-test-setup.sql` for the teams test |
+| `tools/` | `first-team.sql` for a new installation, `restore.html` to put a backup back, `teams-test-setup.sql` and `teams-test-remove.sql` for the teams test |
 
 ## Possible future
 

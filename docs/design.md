@@ -290,7 +290,7 @@ Decided on 2026-11-09: one shared database and one version of the software for e
 - **Saving is tested too:** `tests/store.test.js` runs the Store on the local data layer in node: all or nothing, undo, the `changed_at` check, and the rules that need more than one row.
 - **Scripts from outside are pinned:** a script from a CDN carries an `integrity` hash, so the browser refuses a file that isn't exactly the one checked. Only files that are in the package itself: a `.min.js` jsDelivr generates can change, and the hash would then block the app for everyone. `tests/release.test.js` fails without it. The Google Fonts stylesheet can't have one, because Google serves different CSS per browser; a stylesheet can't read the login.
 - **Teams are kept apart, proven against the real database:** `tests/teams.test.js`. It was checked to fail by breaking the rule on one table and switching Row Level Security off on another.
-- **Before every release:** `node tests/model.test.js`, `node tests/store.test.js`, `node tests/release.test.js`, `node tests/restore.test.js`, `node tests/contract.test.js`, `tests/escape.html` in the browser. After a change in `migrations/`: `node tests/teams.test.js` too.
+- **Before every release:** `node tests/model.test.js`, `node tests/store.test.js`, `node tests/release.test.js`, `node tests/restore.test.js`, `node tests/contract.test.js`, `tests/escape.html` in the browser. After a change in `migrations/`: `node tests/teams.test.js` too (setup in the README, on a separate Supabase project once JAPT is in real use).
 
 ## 8. Possible future
 

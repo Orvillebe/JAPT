@@ -1,4 +1,4 @@
--- JAPT: two test teams for tests/teams.test.js. Only for testing; a reset of the database removes them.
+-- JAPT: two test teams for tests/teams.test.js. Only for testing; tools/teams-test-remove.sql removes them.
 -- First make two logins in Authentication > Users (Auto Confirm): the e-mails below, passwords of your choice.
 -- Then run this once in the SQL Editor.
 

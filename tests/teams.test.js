@@ -5,9 +5,14 @@
  * function, A tries to read, add, change and delete what belongs to B. One attempt that works fails the test.
  * Also: nothing is reachable without logging in, and no table is without Row Level Security.
  *
+ * When: after every new file in migrations/, and before going live. Step by step: README, "Teams test".
+ *
  * The passwords stay with you, in tests/teams-test.env (not in git):
  *   JAPT_TEST_A_PASSWORD=...
  *   JAPT_TEST_B_PASSWORD=...
+ * It tests the database in deployment.js, unless that file also names another one:
+ *   JAPT_TEST_SUPABASE_URL=...
+ *   JAPT_TEST_SUPABASE_KEY=...      (the publishable key, never the secret one)
  * Run: node tests/teams.test.js (no dependencies; it cleans up its own test rows).
  */
 
@@ -15,10 +20,14 @@ const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
 
-const deployment = fs.readFileSync(path.join(__dirname, '..', 'deployment.js'), 'utf8');
-const URL_ = deployment.match(/supabaseUrl: '([^']+)'/)[1], KEY = deployment.match(/supabaseKey: '([^']+)'/)[1];
 const env = Object.fromEntries(fs.readFileSync(path.join(__dirname, 'teams-test.env'), 'utf8')
   .split('\n').filter(l => l.includes('=')).map(l => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()]));
+const deployment = fs.readFileSync(path.join(__dirname, '..', 'deployment.js'), 'utf8');
+// A url with the key of another project would only fail later and less clearly, so it's both or neither.
+assert.strictEqual(!env.JAPT_TEST_SUPABASE_URL, !env.JAPT_TEST_SUPABASE_KEY,
+  'teams-test.env needs both JAPT_TEST_SUPABASE_URL and JAPT_TEST_SUPABASE_KEY, or neither');
+const URL_ = env.JAPT_TEST_SUPABASE_URL || deployment.match(/supabaseUrl: '([^']+)'/)[1];
+const KEY = env.JAPT_TEST_SUPABASE_KEY || deployment.match(/supabaseKey: '([^']+)'/)[1];
 
 const TEAM_A = 'teamtest-a', TEAM_B = 'teamtest-b';
 const RETURN_ROWS = { Prefer: 'return=representation' };
@@ -195,6 +204,7 @@ async function attack(a, b) {
 }
 
 (async () => {
+  console.log('teams test against ' + URL_);
   const a = await login('japt-test-a@example.com', env.JAPT_TEST_A_PASSWORD);
   const b = await login('japt-test-b@example.com', env.JAPT_TEST_B_PASSWORD);
   try {

@@ -146,13 +146,12 @@ const CalendarWeek = (() => {
     const titles = ids.map(id => (Store.task(id) || {}).title).filter(Boolean).join(', ');
     return `<div class="covered" title="${esc(titles)}">${UI.tn('cal.covered_tasks', ids.length)}</div>`;
   }
-  const SHORT_MINUTES = 45;   // shorter has room for one task, or for its times, not both: the task goes first
+  const SHORT_MINUTES = 45;   // shorter is just room for its times and one task, so both get smaller
   function blockPiece(place, from, to, firstHour, label, content, { noRoom = false, part = false } = {}) {
     const position = `top:${topPx(from, firstHour)}px;height:${(to - from) / 60 * PX_PER_HOUR}px`;
     const short = to - from < SHORT_MINUTES ? 'short' : '';
-    const times = UI.span(UI.fmt(from), UI.fmt(to));
     return html`
-      <div class="block ${short} ${noRoom ? 'noroom' : ''}" ${noRoom ? 'data-noroom' : ''} title="${short ? times : ''}"
+      <div class="block ${short} ${noRoom ? 'noroom' : ''}" ${noRoom ? 'data-noroom' : ''}
         ${part ? `data-part-from="${from}" data-part-to="${to}"` : ''} data-place="${P(place)}" style="${position}">
         <div class="bh">${label}<span>${UI.span(UI.fmt(from), UI.fmt(to))}</span></div>
         ${content}

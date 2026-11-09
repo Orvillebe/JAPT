@@ -504,7 +504,7 @@ dialog.gvw.editing{overflow:visible}
 .chip .t{flex:1 1 50%;min-width:0;overflow-wrap:break-word;font-weight:600;line-height:1.3}
 /* past het niet in het blok: één regel per taak, klik voor alle info */
 .block.snug .chip{padding:4px 8px;gap:0}
-.block.snug .chip .meta, .block.snug .chip .x{display:none}
+.block.snug .chip .meta{display:none}
 .block.snug .chip .ct{align-items:center}
 .block.snug .chip .t{font-size:13px}
 .block.snug .chip .wd{width:18px;height:18px;font-size:9.5px}
@@ -512,7 +512,6 @@ dialog.gvw.editing{overflow:visible}
 .block.tight .list{gap:3px}
 .block.tight .chip{padding:4px 8px;gap:0}
 .block.tight .chip .meta{display:none}
-.block.tight .chip .x{display:none}
 .block.tight .chip .ct{align-items:center;flex-wrap:nowrap}
 .block.tight .chip .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
 .block.tight .chip .wd{width:18px;height:18px;font-size:9.5px}
@@ -691,8 +690,9 @@ input,textarea,select{color:var(--text)}
 .dragging-any .meeting{pointer-events:none}   /* slepen gaat door de meeting heen naar het blok eronder */
 
 .block.noroom{background:transparent}
-.block.short{padding:3px 6px}
-.block.short .bh{display:none}   /* een halfuur: de plaats gaat naar de taak, de uren staan in de tooltip */
+.block.short{padding:0 6px 1px;gap:0}   /* een halfuur: net plaats voor de uren en één taak */
+.block.short .bh{font-size:10.5px;line-height:13px}
+.block.short .chip{padding:2px 8px}
 .covered{position:absolute;z-index:3;right:6px;bottom:6px;padding:1px 8px;border-radius:9px;background:var(--panel);border:1px solid var(--line);font-size:12px;color:var(--block-ink)}   /* boven de meeting: de taken blijven ingepland */
 
 /* Beheer: de tabbladen als menu links, zodat negen woorden niet over twee rijen breken */

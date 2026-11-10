@@ -2,7 +2,8 @@
  * JAPT Store - the data in memory, and every user action as one save with its undo.
  *
  * Responsibilities:
- *   - Loading everything (DataService.loadAll), reloading at natural moments (App decides when)
+ *   - Loading everything (DataService.loadAll) at the start, then only what changed (loadChanges), at
+ *     natural moments (App decides when)
  *   - Every action is one batch of changes, saved all or nothing; memory follows what was stored
  *   - Undo: every batch returns a function that saves the opposite changes
  *   - The changed_at check: updates expect the version that was loaded; a refused save reloads
@@ -28,12 +29,45 @@ const Store = (() => {
   async function load() {
     const cutoff = new Date(Date.now() - JAPT_CONFIG.binDays * 864e5).toISOString();
     try { await DataService.purgeBin(cutoff); } catch (e) { console.error('Emptying the Bin failed', e); }
-    await reload();
+    await reload({ everything: true });
   }
-  async function reload() {
+  // After the first load only what changed comes in (DataService.loadChanges); when the layer can't tell,
+  // everything. Nothing changed: nothing to redraw.
+  async function reload({ everything = false } = {}) {
+    const changes = everything ? null : await DataService.loadChanges();
+    if (changes) {
+      if (mergeChanges(changes)) changed();
+      return;
+    }
     const data = await DataService.loadAll();
     raw = Object.fromEntries(TABLES.map(t => [t, data[t] || []]));
     changed();
+  }
+  // Takes in what changed: gone rows out, changed rows in, and the rows of a task that is gone with it.
+  // Returns whether anything is different. A row comes back unchanged now and then (the database looks a
+  // little further back than asked); the same version counts as nothing new.
+  function mergeChanges({ rows, removed }) {
+    let different = false;
+    for (const { table, id } of removed) {
+      if (!raw[table]) continue;
+      const kept = raw[table].filter(r => r.id !== id);
+      if (kept.length !== raw[table].length) { raw[table] = kept; different = true; }
+    }
+    for (const [table, list] of Object.entries(rows)) {
+      if (!raw[table]) continue;
+      for (const row of list) {
+        const i = raw[table].findIndex(r => r.id === row.id);
+        if (i >= 0 && raw[table][i].changedAt === row.changedAt) continue;
+        if (i >= 0) raw[table][i] = row; else raw[table].push(row);
+        different = true;
+      }
+    }
+    const live = new Set(raw.tasks.map(k => k.id));
+    for (const t of TASK_TABLES) {
+      const kept = raw[t].filter(r => live.has(r.taskId));
+      if (kept.length !== raw[t].length) { raw[t] = kept; different = true; }
+    }
+    return different;
   }
   function changed() {
     cache = null;

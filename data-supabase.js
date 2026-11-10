@@ -7,6 +7,7 @@
  *   - The team: everything is read and written for the team you are a member of
  *   - Translating between database columns and app fields
  *   - Hiding binned rows in one place: loadAll never returns them
+ *   - Reloading only what changed since the previous load (changes_since in migrations/005)
  *
  * Everything that knows about Supabase is in this file and in migrations/. What you may reach is decided
  * in the database (Row Level Security), not here.
@@ -25,6 +26,7 @@ function createSupabaseData() {
     global: { fetch: fetchWithLimit }
   });
   let teamId = null;   // set by hasAccess, which the app calls before anything is loaded
+  let loadedUntil = null;   // the database's time of the last load: the next reload asks what changed since
 
   /* ---------- columns and fields ---------- */
 
@@ -66,7 +68,15 @@ function createSupabaseData() {
       if (data.length < PAGE) return rows.map(fromDb);
     }
   }
-  const notBinned = q => q.is('deleted_at', null);
+  const isBinned = (table, row) => BINNED_TABLES.includes(table) && !!row.deletedAt;
+  // What changed in the team since a moment, in one request; since null is everything. Null back: that
+  // moment is too long ago to tell, load everything.
+  async function changesSince(since) {
+    const { data, error } = await sb.rpc('changes_since', { p_team: teamId, p_since: since });
+    check(error);
+    if (data) loadedUntil = data.until;
+    return data;
+  }
   const inBin = q => q.not('deleted_at', 'is', null);
 
   /* ---------- login ---------- */
@@ -118,11 +128,26 @@ function createSupabaseData() {
     },
 
     async loadAll() {
-      const rows = await Promise.all(TABLES.map(t => all(t, BINNED_TABLES.includes(t) ? notBinned : undefined)));
-      const out = Object.fromEntries(TABLES.map((t, i) => [t, rows[i]]));
+      const { rows } = await changesSince(null);
+      const out = Object.fromEntries(TABLES.map(t => [t, (rows[t] || []).map(fromDb).filter(r => !isBinned(t, r))]));
       const live = new Set(out.tasks.map(k => k.id));
       for (const t of TASK_TABLES) out[t] = out[t].filter(r => live.has(r.taskId));
       return out;
+    },
+
+    // Rows changed since the previous load, and the rows that are gone (removed or binned).
+    async loadChanges() {
+      if (!loadedUntil) return null;
+      const answer = await changesSince(loadedUntil);
+      if (!answer) { loadedUntil = null; return null; }
+      const rows = {}, removed = answer.removed.slice();
+      for (const t of TABLES) {
+        for (const row of (answer.rows[t] || []).map(fromDb)) {
+          if (isBinned(t, row)) removed.push({ table: t, id: row.id });
+          else (rows[t] = rows[t] || []).push(row);
+        }
+      }
+      return { rows, removed };
     },
 
     async loadBin() {

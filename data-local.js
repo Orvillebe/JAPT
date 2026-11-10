@@ -28,7 +28,8 @@ function createLocalData() {
     1: db => { LOCAL_TABLES.forEach(t => { db[t] = db[t] || []; }); },
     2: () => {},   // migration 002 only adds a check to the real database
     3: () => {},   // migration 003 adds an optional field
-    4: () => {}    // migration 004 only hardens the real database
+    4: () => {},   // migration 004 only hardens the real database
+    5: () => {}    // migration 005 only notes removals in the real database
   };
 
   function upgrade(db) {
@@ -106,6 +107,9 @@ function createLocalData() {
       for (const t of TASK_TABLES) out[t] = out[t].filter(r => live.has(r.taskId));
       return copy(out);
     },
+
+    // This browser has no colleagues to wait for: reloading everything is as quick.
+    async loadChanges() { return null; },
 
     async loadBin() {
       const db = read();

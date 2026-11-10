@@ -158,7 +158,7 @@ One file per task; each file starts with what it is responsible for.
 | `manage.js` | The Beheer window: tabs and drawing |
 | `manage-blocks.js`, `manage-period.js`, `manage-other.js` | The tabs Werkblokken and Werkperiode; the seven small tabs |
 | `agenda.js`, `export.js` | Meetings from the agenda link; backup and analysis export |
-| `app.js` | Starting, login, version check, pages, reloading at natural moments |
+| `app.js` | Starting, login, version check, pages, loading changes at natural moments and every 20 s in view |
 | `migrations/` | The database, one numbered file per change |
 | `tools/` | `first-team.sql` for a new installation, `restore.html` to put a backup back, `teams-test-setup.sql` and `teams-test-remove.sql` for the teams test |
 

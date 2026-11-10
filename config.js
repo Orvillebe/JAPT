@@ -30,8 +30,11 @@ const JAPT_CONFIG = (() => {
     // How long a loaded agenda is kept before it is read again (minutes). docs/design.md, Meetings.
     agendaMinutes: 10,
 
-    // The shortest time between two reloads of the team's changes (seconds), so moving through
-    // weeks quickly doesn't reload on every click. docs/design.md, Working at the same time.
+    // How often the team's changes are loaded while the app is in view, and the shortest time between two
+    // loads when you move through weeks or come back to the app (seconds). It sets how late a colleague's
+    // change shows up; saving never overwrites it either way. Asking what changed costs about 1 kB, so this
+    // can be short. At least 5, so moving quickly through weeks counts as one load.
+    // docs/design.md, Working at the same time.
     reloadSeconds: 20,
 
     // How long one request to the database may take (seconds). Saves wait their turn, so one that never
@@ -51,7 +54,7 @@ const JAPT_CONFIG = (() => {
     dayStart: int(0, 23),
     dayEnd: int(1, 24),
     agendaMinutes: int(1, 1440),
-    reloadSeconds: int(0, 3600),
+    reloadSeconds: int(5, 3600),
     requestSeconds: int(1, 300)
   };
 

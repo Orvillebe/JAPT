@@ -149,6 +149,31 @@ async function attack(a, b) {
   r = await rpc(a, 'my_team_ids', {});
   check('my_team_ids returns only your own', r.ok && JSON.stringify(r.data) === JSON.stringify([TEAM_A]), r.data);
 
+  // Reloading what changed (migrations/005): the answer and the notes of removed rows stay within a team.
+  r = await rpc(a, 'changes_since', { p_team: TEAM_B, p_since: null });
+  check('A can\'t ask what changed in B', refused(r), r);
+  r = await rpc(a, 'changes_since', { p_team: TEAM_A, p_since: null });
+  check('What changed in A holds only A',
+    r.ok && Object.values(r.data.rows).every(rows => rows.every(x => x.team_id === TEAM_A)), r.data);
+  const goneId = `${TEAM_B}-gone`, goneNote = `/rest/v1/removed_rows?team_id=eq.${TEAM_B}&id=eq.${goneId}`;
+  await batch(b, TEAM_B, [{ op: 'insert', table: 'clients', row: { id: goneId, name: 'weg' } }]);
+  await batch(b, TEAM_B, [{ op: 'remove', table: 'clients', id: goneId }]);
+  r = await call(b, 'GET', goneNote);
+  check('A removed row leaves a note for its own team', r.ok && r.data.length === 1, r.data);
+  r = await call(a, 'GET', `/rest/v1/removed_rows?team_id=eq.${TEAM_B}`);
+  check('A can\'t read B\'s notes', empty(r), r.data);
+  r = await call(a, 'POST', '/rest/v1/removed_rows', { team_id: TEAM_A, table_name: 'tasks', id: 'x' }, RETURN_ROWS);
+  check('Nobody writes a note directly', r.status === 403, r);
+  r = await call(b, 'DELETE', `/rest/v1/removed_rows?team_id=eq.${TEAM_B}`, undefined, RETURN_ROWS);
+  check('Nobody deletes notes directly, also not of the own team', empty(r), r.data);
+  await rpc(a, 'clear_removed_notes', { p_team: TEAM_B });
+  r = await call(b, 'GET', goneNote);
+  check('A can\'t clear B\'s notes', r.ok && r.data.length === 1, r.data);
+  r = await call(null, 'GET', '/rest/v1/removed_rows?select=id');
+  check('removed_rows: nothing without logging in', refused(r) || empty(r), r);
+  r = await rpc(null, 'changes_since', { p_team: TEAM_B, p_since: null });
+  check('What changed needs a login', refused(r), r);
+
   // Without logging in.
   r = await call(null, 'GET', '/rest/v1/teams?select=id');
   check('teams: nothing without logging in', refused(r) || empty(r), r);

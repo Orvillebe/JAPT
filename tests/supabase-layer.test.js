@@ -1,5 +1,6 @@
 /**
- * Tests for the parts of data-supabase.js that decide what a failed request means. The Supabase library is
+ * Tests for the parts of data-supabase.js that decide what a failed request means, and how an answer of
+ * changes_since (migrations/005) becomes what the Store takes in. The Supabase library is
  * replaced by a stand-in: what the database itself does is proven by tests/contract.html?db=live and
  * tests/teams.test.js.
  * Run: node tests/supabase-layer.test.js (no dependencies).
@@ -13,17 +14,20 @@ const vm = require('vm');
 const REQUEST_SECONDS = 0.02;
 const script = new vm.Script(fs.readFileSync(path.join(__dirname, '..', 'data-supabase.js'), 'utf8'));
 
+const { TABLES, BINNED_TABLES, TASK_TABLES } = require('../tables.js');
+
 // The layer on a stand-in library whose save answers with the given error, and the fetch it was handed.
-function layerAnswering(error, fetchStub) {
+// rpcStub(name, args), when given, answers the database functions instead.
+function layerAnswering(error, fetchStub, rpcStub) {
   let limitedFetch = null;
   const window = { supabase: { createClient(url, key, options) {
     limitedFetch = options.global.fetch;
-    return { rpc: async () => ({ data: error ? null : [], error }) };
+    return { rpc: rpcStub || (async () => ({ data: error ? null : [], error })) };
   } } };
   const context = {
     window, setTimeout, AbortController, fetch: fetchStub,
     JAPT_DEPLOYMENT: { supabaseUrl: 'https://x.test', supabaseKey: 'k' },
-    JAPT_CONFIG: { requestSeconds: REQUEST_SECONDS }, TABLES: [], BINNED_TABLES: [], TASK_TABLES: []
+    JAPT_CONFIG: { requestSeconds: REQUEST_SECONDS }, TABLES, BINNED_TABLES, TASK_TABLES
   };
   vm.createContext(context);
   script.runInContext(context);
@@ -38,7 +42,54 @@ const hanging = (url, init) => new Promise((_, reject) => {
   init.signal.addEventListener('abort', () => reject(new Error('stopped')));
 });
 
+// A database that answers changes_since with the next answer from the list, and remembers what was asked.
+function changesDatabase(answers) {
+  const asked = [];
+  const rpcStub = async (name, args) => { asked.push(args.p_since); return { data: answers.shift(), error: null }; };
+  return { layer: layerAnswering(null, null, rpcStub).data, asked };
+}
+const T1 = '2026-11-10T09:00:00+00:00', T2 = '2026-11-10T09:01:00+00:00';
+const plain = v => JSON.parse(JSON.stringify(v));   // the layer's objects come from its own world
+const dbRow = fields => ({ team_id: 'team', changed_at: T1, ...fields });
+
 const TESTS = {
+  'the first load is everything, without binned rows or the rows of a binned task': async () => {
+    const { layer, asked } = changesDatabase([{ until: T1, removed: [], rows: {
+      tasks: [dbRow({ id: 'a', title: 'Levend' }), dbRow({ id: 'b', title: 'Weg', deleted_at: T1 })],
+      block_placements: [dbRow({ id: 'p1', task_id: 'a', start_min: 540 }), dbRow({ id: 'p2', task_id: 'b' })]
+    } }]);
+    const all = await layer.loadAll();
+    assert.deepStrictEqual(asked, [null]);
+    assert.deepStrictEqual(plain(all.tasks.map(k => k.id)), ['a']);
+    assert.deepStrictEqual(plain(all.block_placements.map(p => p.id)), ['p1']);
+    assert.strictEqual(all.block_placements[0].start, 540, 'columns become fields');
+    assert.ok(!('teamId' in all.tasks[0]) && !('team_id' in all.tasks[0]), 'the team stays in the layer');
+    assert.ok(TABLES.every(t => Array.isArray(all[t])), 'every table, also the empty ones');
+  },
+  'a reload asks what changed since the previous answer': async () => {
+    const empty = until => ({ until, removed: [], rows: {} });
+    const { layer, asked } = changesDatabase([empty(T1), empty(T2), empty(T2)]);
+    assert.strictEqual(await layer.loadChanges(), null, 'nothing loaded yet: load everything');
+    await layer.loadAll();
+    await layer.loadChanges();
+    await layer.loadChanges();
+    assert.deepStrictEqual(asked, [null, T1, T2]);
+  },
+  'a binned row comes back as gone, a changed row as changed': async () => {
+    const { layer } = changesDatabase([{ until: T1, removed: [], rows: {} }, { until: T2,
+      removed: [{ table: 'block_placements', id: 'p1' }],
+      rows: { tasks: [dbRow({ id: 'a', title: 'Nieuw' }), dbRow({ id: 'b', deleted_at: T2 })] } }]);
+    await layer.loadAll();
+    const changes = await layer.loadChanges();
+    assert.deepStrictEqual(plain(changes.rows.tasks.map(k => [k.id, k.title])), [['a', 'Nieuw']]);
+    assert.deepStrictEqual(plain(changes.removed), [{ table: 'block_placements', id: 'p1' }, { table: 'tasks', id: 'b' }]);
+  },
+  'too long ago to tell: load everything, also the next time': async () => {
+    const { layer } = changesDatabase([{ until: T1, removed: [], rows: {} }, null]);
+    await layer.loadAll();
+    assert.strictEqual(await layer.loadChanges(), null);
+    assert.strictEqual(await layer.loadChanges(), null);
+  },
   'a save that ends without a code from the database is "no answer"': async () => {
     assert.strictEqual((await saveError({ message: 'TypeError: Failed to fetch', code: '' })).code, 'no-answer');
     assert.strictEqual((await saveError({ message: '<html>bad gateway</html>' })).code, 'no-answer');

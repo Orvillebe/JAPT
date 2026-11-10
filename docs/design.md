@@ -123,6 +123,7 @@ As built in `migrations/001_initial.sql`. Keys are `(team_id, id)`, ids are made
 | `period_placements` | A task in a work period, without day or hour (`period_start`, `task_id`, `position`). The mockup's `S.plan['cy@2026-11-02']`. |
 | `calendars` | The agendas meetings come from: name, link (`url`) and `owner` (empty = the team). Set in Beheer. Readable only by members on the access list. One row for now. |
 | `app_settings` | Settings shared within a team: first day of the week, deadline reminder days, work period on or off. One row per team and setting (key `team_id` + `id`). |
+| `removed_rows` | Which rows were removed, and when, for 30 days, so a reload can ask what is gone (migration 005). Written only by the database. |
 | `schema_migrations` | Which migrations have run. |
 
 ## 5. Rules
@@ -197,7 +198,20 @@ JAPT is more likely than JAFT to be used by two people at once (planning togethe
 - **Actions run one after another, whole.** A second click while the first is still on its way reads the state after the first has been saved, so it builds on what is really there and doesn't look like a change by someone else. A change by anyone else is still refused.
 - **A save checks `changed_at`:** it only saves if nobody changed that record since it was loaded. Otherwise the app reloads it and says so. Without this, the last save wins silently.
 
-**Decided: reload at natural moments.** Changes of others are loaded when the app opens, when the tab comes back into view, and when you move to another day, week or period. A redraw never happens in the middle of a drag or with a task card open; what arrives then waits until they are done. While a form or window is open the page behind it can reload, but the form itself is left alone, and it remembers the version it opened: saving compares with that version, so a reload can't make older values count as up to date. When someone else changed it, the form says so, keeps what you typed, and a second save is a conscious choice for your own version. Undo expects the row as your save left it, so it never overwrites what someone changed since. What it misses: two people looking at the same week at the same moment see each other's changes only at their next move; the `changed_at` check stops a save on something that changed meanwhile.
+**Decided: two kinds of loading, at natural moments and every 20 seconds in view.** *Everything* reads all the team's data; *changes* asks only what changed since the previous load (`changes_since`, migrations/005), about 1 kB when nothing did. Because changes cost so little, they are loaded often; everything only when there is nothing to build on.
+
+| What you do | What the app does |
+|---|---|
+| Open the app | Load everything |
+| Move to another day, week or period | Load changes, unless it did in the last 20 s |
+| Look at the app without clicking | Load changes every 20 s |
+| Switch to another tab or app, lock the phone | Nothing, as long as the app is out of view |
+| Come back to the app | Load changes, unless it did in the last 20 s |
+| Come back after more than 30 days | Load everything: the database keeps removals that long |
+| Save something someone else changed meanwhile, or get no answer | Say so and load changes at once; a form keeps what you typed |
+| Drag a task, or have a task card open | Nothing until you are done, then load changes |
+
+The 20 seconds is `reloadSeconds` in `config.js`: how late a colleague's change shows up at most. It is a choice, not a measurement; 10 or 30 work as well. One number for both the moments and the clock, because a second number for "actively planning" would save little and need a rule for when you are active. On your own machine (the local data layer) nobody else changes anything, so nothing is loaded by the clock. A removed row leaves nothing to see, so the database notes every removal for 30 days; an app that hasn't asked for that long loads everything. The database looks 2 minutes further back than asked, so a save that was still busy at the previous load isn't missed. A redraw never happens in the middle of a drag or with a task card open; what arrives then waits until they are done. While a form or window is open the page behind it can reload, but the form itself is left alone, and it remembers the version it opened: saving compares with that version, so a reload can't make older values count as up to date. When someone else changed it, the form says so, keeps what you typed, and a second save is a conscious choice for your own version. Undo expects the row as your save left it, so it never overwrites what someone changed since. What it misses: two people looking at the same week see each other's changes up to 20 seconds late; the `changed_at` check stops a save on something that changed meanwhile.
 
 The options that were considered:
 
@@ -206,7 +220,7 @@ The options that were considered:
   - *Database:* the followed tables are added to Supabase's change feed (one migration line each). Row Level Security also applies to the change messages, so the access list holds. Far within the free plan (200 connections at once, 2 million messages a month).
   - *Data layer:* a new `onChange(callback)` in the data-layer contract. The local version needs it too (tabs tell each other through `BroadcastChannel`), to test without Supabase. A later replacement of Supabase must offer it as well.
   - *Own changes come back* as messages; merging must give the same result when a change arrives twice.
-  - *Missed messages are not resent* (a phone asleep, a dropped connection). On reconnect and when the tab comes back into view, the app reloads everything anyway, so *live* comes on top of *middle*, it doesn't replace it.
+  - *Missed messages are not resent* (a phone asleep, a dropped connection). On reconnect and when the tab comes back into view, the app loads the changes anyway, so *live* comes on top of *middle*, it doesn't replace it.
   - *Interface:* a redraw must wait while you drag (it would remove the card under the mouse), must not overwrite an open task or goal form, and the form must say so when its task was deleted meanwhile. The open task card, the Inbox undo and the confirmation panels each need that check.
 
 ### Meetings

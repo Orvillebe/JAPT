@@ -759,6 +759,42 @@ test('goal figures count done, open and planned', async () => {
   eq(S.goalStats(S.goal('g1')), { total: 3, done: 1, open: 2, planned: 1 });
 });
 
+/* ---------- reloading only what changed ---------- */
+
+// The layer answers loadChanges with these changes from now on.
+const changesFrom = (world, changes) => { world.DS.loadChanges = async () => plain(changes); };
+
+test('a reload takes in what changed and what is gone', async () => {
+  const w = await app({ tasks: [task('a'), task('b')] });
+  changesFrom(w, { rows: { tasks: [task('a', { title: 'Hernoemd', changedAt: '2026-11-04T10:00:00.000Z' }), task('c')] },
+    removed: [{ table: 'tasks', id: 'b' }] });
+  await w.S.reload();
+  eq(w.S.task('a').title, 'Hernoemd');
+  eq(ids(w.S.tasks()), ['a', 'c']);
+});
+test('the rows of a task that is gone go with it', async () => {
+  const w = await app({ tasks: [task('a')], block_placements: [inBlock('p1', 'a', TODAY, 'wo')] });
+  const place = { date: TODAY, blockId: 'wo' };
+  eq(w.S.idx().tasksIn(place), ['a']);
+  changesFrom(w, { rows: {}, removed: [{ table: 'tasks', id: 'a' }] });
+  await w.S.reload();
+  eq(w.S.idx().tasksIn(place), []);
+});
+test('a reload with nothing new redraws nothing', async () => {
+  const w = await app({ tasks: [task('a')] });
+  let redraws = 0;
+  w.S.onChange(() => { redraws++; });
+  changesFrom(w, { rows: { tasks: [task('a')] }, removed: [{ table: 'tasks', id: 'bestaat-niet' }] });
+  await w.S.reload();
+  eq(redraws, 0);
+});
+test('when the layer can\'t tell what changed, everything is loaded', async () => {
+  const w = await app({ tasks: [task('a')] });
+  await w.DS.batch([{ op: 'update', table: 'tasks', id: 'a', fields: { title: 'Elders gewijzigd' } }]);
+  await w.S.reload();
+  eq(w.S.task('a').title, 'Elders gewijzigd');
+});
+
 (async () => {
   let ok = 0;
   for (const [name, fn] of tests) {

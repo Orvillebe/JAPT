@@ -152,7 +152,7 @@ const App = (() => {
       if (!await checkVersion()) return;
       if (!await DataService.hasAccess()) { $('loading').hidden = true; $('accessScreen').hidden = false; return; }
       await Store.load();
-      loadedAt = Date.now();
+      loaded();
     } catch (e) {
       console.error(e);
       $('loading').textContent = t('error.load', { reason: e.message || e });
@@ -175,16 +175,28 @@ const App = (() => {
     show(View.page);
   }
 
-  // Colleagues' changes are loaded when the app opens, when you come back to the tab, and when you move
-  // to another day, week or period (docs/design.md, Working at the same time). Never during a drag or
-  // with a task card open: a reload that was due then happens right after.
+  // Colleagues' changes are loaded when you come back to the tab, when you move to another day, week or
+  // period, and by themselves while the app is in view, at most once per reloadSeconds (docs/design.md,
+  // Working at the same time). Never during a drag or with a task card open: a reload that was due then
+  // happens right after. Only the opening loads everything; these ask what changed (Store.reload).
   async function reloadIfStale(force) {
     if (!started) return;
-    if (busy()) { reloadWaiting = reloadWaiting || force; return; }
     if (!force && Date.now() - loadedAt < JAPT_CONFIG.reloadSeconds * 1000) return;
-    loadedAt = Date.now();
+    if (busy()) { reloadWaiting = true; return; }
+    loaded();
     try { if (!await checkVersion()) return; await Store.reload(); }
     catch (e) { console.error('Reloading failed', e); }
+  }
+  // After every load the next one is planned. Out of view nothing is loaded; coming back does that.
+  // Only with a shared database: on this machine nobody else changes anything.
+  let nextReload = null;
+  function loaded() {
+    loadedAt = Date.now();
+    clearTimeout(nextReload);
+    if (!DataService.needsLogin) return;
+    nextReload = setTimeout(() => {
+      if (document.visibilityState === 'visible') reloadIfStale(false);
+    }, JAPT_CONFIG.reloadSeconds * 1000);
   }
   const navigated = () => { reloadIfStale(false); };
 
@@ -200,7 +212,7 @@ const App = (() => {
     $('btnLogout').onclick = logout;
     $('accessLogout').onclick = logout;
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') reloadIfStale(true);
+      if (document.visibilityState === 'visible') reloadIfStale(false);
     });
     if (await DataService.getSession()) await start();
     else showLogin();

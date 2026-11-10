@@ -38,6 +38,7 @@ All are `async` unless noted.
 | `hasAccess()` | Whether the person logged in may use this; also picks their team. Called before anything is loaded |
 | `schemaVersion()` | The number of the last migration that has run, `0` for an empty database. Throws on anything else, such as no connection |
 | `loadAll()` | `{table: rows}` for every table in `TABLES`: no rows in the Bin, and no rows in `TASK_TABLES` of a task in the Bin |
+| `loadChanges()` | What changed since the last `loadAll()` or `loadChanges()`: `{rows: {table: rows changed}, removed: [{table, id}]}`. A row that went to the Bin counts as removed. A row may come along that didn't change; that is no error. Return `null` when you can't tell: the app then calls `loadAll()`. `null` always is fine, only heavier: the local version does that |
 | `loadBin()` | `{clients, goals, tasks}` that are in the Bin |
 | `batch(ops)` | See below |
 | `purgeBin(beforeIso)` | Removes for good what went to the Bin before that moment, and what belongs to those tasks. A task not in the Bin and not done, whose goal is in the Bin, goes to the Inbox (`goalId` null, `stage` `'inbox'`) |

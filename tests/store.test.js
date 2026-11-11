@@ -755,10 +755,13 @@ test('a due-soon backlog task is shown in Nog niet ingepland without changing it
   eq(S.task('a').stage, 'backlog');
 });
 test('goal figures count done, open and planned, and the tasks per list', async () => {
-  const { S } = await app({ tasks: [task('a'), task('b', { doneOn: YESTERDAY }), task('c'), task('d', { stage: 'backlog' })],
+  const { S } = await app({ tasks: [task('a'), task('b', { doneOn: YESTERDAY }), task('c'), task('d', { stage: 'backlog' }),
+    task('e', { stage: 'inbox' }), task('f', { stage: 'backlog', deadline: TOMORROW })],
     block_placements: [inBlock('p1', 'c', NEXT_MONDAY, 'ma')] });
-  eq(S.goalStats(S.goal('g1')), { total: 4, done: 1, open: 3, planned: 1,
-    lists: { inbox: 0, open: 1, planned: 1, done: 1, backlog: 1 } });
+  eq(S.goalStats(S.goal('g1')), { total: 6, done: 1, open: 5, planned: 1,
+    lists: { planned: 1, open: 2, backlog: 2, done: 1 } });
+  eq(S.goalListOf(S.task('e')), 'backlog', 'a task in the Inbox waits under Backlog in its goal');
+  eq(S.goalListOf(S.task('f')), 'open', 'a due-soon backlog task as in the task list');
 });
 
 /* ---------- reloading only what changed ---------- */

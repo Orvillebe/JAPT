@@ -206,8 +206,8 @@ const Tasks = (() => {
   const formField = (label, control) => `<label class="f"><span class="fl">${label}</span>${control}</label>`;
 
   // A new task only: which list it starts in. The values are stages, because that is what gets saved.
-  function putInFieldHtml() {
-    const option = stage => `<option value="${stage}">${t('list.' + stage)}</option>`;
+  function putInFieldHtml(chosen) {
+    const option = stage => `<option value="${stage}" ${stage === chosen ? 'selected' : ''}>${t('list.' + stage)}</option>`;
     const select = `<select name="list">${option(M.STAGE.OPEN)}${option(M.STAGE.BACKLOG)}</select>`;
     return formField(t('form.put_in'), select);
   }
@@ -220,7 +220,7 @@ const Tasks = (() => {
     </div>`;
   }
 
-  function formHtml(k) {
+  function formHtml(k, preset) {
     const inInbox = !!k && k.stage === M.STAGE.INBOX;
     const title = esc(k ? k.title : ''), hint = t('task.ph');
     const titleInput = `<input type="text" name="title" autocomplete="off" placeholder="${hint}" value="${title}">`;
@@ -233,7 +233,7 @@ const Tasks = (() => {
       ${formField(t('form.deadline'), '<input type="date" name="deadline">')}
       <div data-rephint></div>
       <div class="f"><span class="fl">${t('form.who_long')}</span><div class="wrow" data-who></div></div>
-      ${k ? '' : putInFieldHtml()}
+      ${k ? '' : putInFieldHtml(preset.stage)}
       ${formButtonsHtml(k)}
     </form>`;
   }
@@ -328,11 +328,12 @@ const Tasks = (() => {
 
   // New (id null) or edit. The window is made here and removed when it closes; it closes only after the
   // save succeeded, so nothing you typed is lost when saving fails.
-  function openForm(id) {
+  // preset, for a new task: {goalId, stage} already chosen (from the goal view).
+  function openForm(id, preset = {}) {
     const k = id ? Store.task(id) : null; if (id && !k) return;
     Calendar.closePop();
     const dlg = UI.dialog();
-    dlg.innerHTML = formHtml(k);
+    dlg.innerHTML = formHtml(k, preset);
     const f = dlg.querySelector('form'), q = sel => f.querySelector(sel);
     const state = {
       seenAt: k ? k.changedAt : undefined,   // the version this form shows
@@ -343,7 +344,7 @@ const Tasks = (() => {
     };
     state.photos = Photos.editor(q('.notebox').parentElement, f, id);
 
-    state.goalEl.value = k && k.goalId != null ? k.goalId : '';
+    state.goalEl.value = (k ? k.goalId : preset.goalId) || '';
     GoalPicker.build(state.goalEl);
     DeadlinePicker.wrap(state.deadlineEl);
     if (k) DeadlinePicker.set(state.deadlineEl, k.deadline, k.repeat);
@@ -357,7 +358,7 @@ const Tasks = (() => {
     if (k) q('[data-del]').onclick = () => deleteFromForm(state);
     state.titleEl.focus();
   }
-  const openNew = () => openForm(null);
+  const openNew = (preset = {}) => openForm(null, preset);
   const openEdit = id => openForm(id);
 
   /* ---------- checking off ---------- */
@@ -374,7 +375,7 @@ const Tasks = (() => {
   }
 
   function init() {
-    $('btnNewTask').onclick = openNew;
+    $('btnNewTask').onclick = () => openNew();
     $('fq').oninput = e => { View.filter.q = e.target.value.trim(); View.save(); App.render(); };
     $('btnFilter').onclick = () => { showFilters = !showFilters; render(); };
     $('fClear').onclick = () => { FilterPicker.clear(); $('fq').value = ''; App.render(); };
@@ -394,5 +395,5 @@ const Tasks = (() => {
     Drag.zone(listZone);
   }
 
-  return { init, render, sideState, restoreSide, reveal, notes, openEdit };
+  return { init, render, sideState, restoreSide, reveal, notes, openNew, openEdit };
 })();

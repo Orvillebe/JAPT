@@ -274,11 +274,17 @@ const Store = (() => {
     if (list === LIST.OPEN) r.sort((a, b) => (+dueSoon(b)) - (+dueSoon(a)) || soonestFirst(a, b));
     return r;
   }
-  // A goal's tasks counted: in all, done, not done (open), planned, and per list (lists, keyed by LIST).
+  // The list a task of a goal is shown in, in the goal: as in the task list, and a task still in the Inbox
+  // under Backlog (it waits, like the backlog).
+  const goalListOf = k => (listOf(k) === LIST.INBOX ? LIST.BACKLOG : shownList(k));
+  // A goal's tasks counted: in all, done, not done (open), planned, and per list (lists, keyed by LIST,
+  // as goalListOf says).
+  // A goal's tasks, also those still in the Inbox.
+  const tasksOfGoal = id => raw.tasks.filter(k => k.goalId === id);
   const goalStats = g => {
-    const ts = tasks().filter(k => k.goalId === g.id), open = ts.filter(k => !k.doneOn);
-    const lists = Object.fromEntries(Object.values(LIST).map(l => [l, 0]));
-    ts.forEach(k => { lists[listOf(k)]++; });
+    const ts = tasksOfGoal(g.id), open = ts.filter(k => !k.doneOn);
+    const lists = { [LIST.PLANNED]: 0, [LIST.OPEN]: 0, [LIST.BACKLOG]: 0, [LIST.DONE]: 0 };
+    ts.forEach(k => { lists[goalListOf(k)]++; });
     return { total: ts.length, done: ts.length - open.length, open: open.length, planned: lists[LIST.PLANNED], lists };
   };
 
@@ -775,7 +781,7 @@ const Store = (() => {
     load, onChange, setMeetingsOn,
     setting, periodActive, periodSetUp,
     idx, task, goal, client, member, whoOf, members, allMembers, clients, goals, openGoals, tasks, inbox, clientOfTask,
-    listOf, shownList, dueSoon, isLate, itemsOf, goalStats, blocks, segments, periodAt, periodSetting, blocksOn,
+    listOf, shownList, dueSoon, isLate, itemsOf, goalListOf, tasksOfGoal, goalStats, blocks, segments, periodAt, periodSetting, blocksOn,
     calendarUrl, plannedFromToday, clientNamed, openTasksOf, photosOf, photo,
     taskProblems, goalProblems, clientProblems, memberProblems, calendarUrlProblems, blockProblems, periodProblems,
     loadBin,

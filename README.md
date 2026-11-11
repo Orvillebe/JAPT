@@ -170,6 +170,7 @@ One file per task; each file starts with what it is responsible for.
 | `calendar-week.js`, `calendar-period.js`, `calendar-list.js`, `calendar-card.js` | The day and week views, the work-period view, the list view, the open task card |
 | `tasks.js` | Taken page, left: the task lists and the form |
 | `goals.js`, `inbox.js` | Doelen, Inbox |
+| `goal-tasks.js` | The tasks in an open goal, per list, with dragging in Nog niet ingepland and Backlog |
 | `photos.js` | Photos on a task: the note field with its camera button, making a photo smaller, the row of photos, full screen |
 | `manage.js` | The Beheer window: tabs and drawing |
 | `manage-blocks.js`, `manage-period.js`, `manage-other.js` | The tabs Werkblokken and Werkperiode; the seven small tabs |

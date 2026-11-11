@@ -284,10 +284,19 @@ dialog.gvw{width:min(680px,94vw)}
 .gvv.none{color:var(--muted);font-style:italic}
 dialog.gvw.editing{overflow:visible}
 .gvlist{display:flex;flex-direction:column;gap:6px}
-.gvt{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--tb);border-left:5px solid var(--tb);background:var(--tbg);border-radius:6px}
-.gvt .gvtt{flex:1;min-width:0;font-weight:600;font-size:14px}
+.gvt{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--tb);border-left:5px solid var(--tb);background:var(--tbg);border-radius:6px;cursor:pointer}
+.gvt[data-gvsort]{cursor:grab}
+.gvt .gvtb{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.gvt .gvtt{font-weight:600;font-size:14px}
+.gvt .gvtn{font-size:12.5px;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}   /* de notitie op hooguit twee regels; volledig in de open kaart */
 .gvt.done .gvtt{text-decoration:line-through;opacity:.7}
 .gvt .gvts{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.gvopen>.task{cursor:pointer}
+.gvt.ins-before,.gvopen.ins-before{box-shadow:0 -5px 0 0 var(--block-ink)}
+.gvt.ins-after,.gvopen.ins-after{box-shadow:0 5px 0 0 var(--block-ink)}
+.gvadd{display:block;width:100%;margin-top:8px;text-align:left;border:1px dashed var(--line-strong);background:none;color:var(--muted);border-radius:6px;padding:7px 10px}
+.gvadd:hover{color:var(--text);background:var(--hover-bg)}
+.dragging-any dialog.gvw .sec[data-list="done"]{outline:none;opacity:.5}   /* in het doel kun je alleen in Nog niet ingepland en Backlog loslaten */
 .gvacts{display:flex;justify-content:flex-end;gap:8px;padding-top:14px;border-top:1px solid var(--line)}
 .gvacts .ok{border-color:var(--accent);color:var(--accent-text);font-weight:600}
 .gtop{display:flex;align-items:center;gap:8px}
@@ -298,7 +307,7 @@ dialog.gvw.editing{overflow:visible}
 .bar{display:flex;gap:2px;height:6px;border-radius:4px;background:rgba(0,0,0,.09);overflow:hidden}
 .bar i{display:block;height:100%}
 .bar .b-done{background:#3f8f3a}.bar .b-planned{background:#3d74c9}.bar .b-open{background:#f5dc1f}
-.bar .b-backlog,.bar .b-inbox{background:#8a8780}
+.bar .b-backlog{background:#8a8780}
 .gstat{font-size:12.5px;color:var(--text-2)}
 .gstat-under{margin-top:6px}
 .gconf{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:6px;background:var(--veil)}

@@ -3,7 +3,7 @@
  *
  * Responsibilities:
  *   - Goals per client (then Intern), open goals first, achieved ones on request
- *   - A goal in the large view: its fields, progress and tasks; Behaald (asking what happens with open
+ *   - A goal in the large view: its fields, progress and tasks (goal-tasks.js); Behaald (asking what happens with open
  *     tasks), Heropen, editing in the same window
  *   - The goal form: a client from the list or a new one typed, a colour, deleting (asking what happens
  *     with its tasks; to the Bin with Ongedaan). The same form in its own window or in the goal view.
@@ -19,14 +19,12 @@ const Goals = (() => {
   const M = Model, { $, esc, View, html } = UI;
   const MAX_SUGGESTIONS = 8;   // client suggestions under the field: a short list, typing narrows it down
 
-  // Top to bottom in the large view: what still needs doing first.
-  const LIST_ORDER = { [M.LIST.PLANNED]: 0, [M.LIST.OPEN]: 1, [M.LIST.BACKLOG]: 2, [M.LIST.DONE]: 3 };
 
   /* ---------- shared pieces ---------- */
 
   // The progress bar: one piece per list, as wide as its number of tasks, and the same lists in words
   // under it. Lists without tasks are left out.
-  const BAR_ORDER = [M.LIST.DONE, M.LIST.PLANNED, M.LIST.OPEN, M.LIST.BACKLOG, M.LIST.INBOX];
+  const BAR_ORDER = [M.LIST.DONE, M.LIST.PLANNED, M.LIST.OPEN, M.LIST.BACKLOG];
   function progressHtml(st, statClass) {
     const shown = BAR_ORDER.filter(l => st.lists[l]);
     const pieces = shown.map(l => `<i class="b-${l}" style="flex:${st.lists[l]}"></i>`).join('');
@@ -90,21 +88,6 @@ const Goals = (() => {
   // The open goal view: {dlg, id, editing, confirmAch, achHow}, or null when it is closed.
   let gv = null;
 
-  function statusText(k) {
-    const l = Store.listOf(k), p = Store.idx().of(k.id);
-    if (l !== M.LIST.PLANNED) return t('list.' + l);
-    const when = p.blocks.map(b => UI.fmtDay(b.date)).concat(p.periods.map(() => t('meta.period')));
-    return t('list.planned') + ' · ' + when.join(', ');
-  }
-
-  function taskRowHtml(k, g) {
-    return html`<div class="gvt ${k.doneOn ? 'done' : ''}" style="${UI.goalStyle(g)}">
-      <span class="gvtt">${esc(k.title)}</span>
-      <span class="who">${Photos.mark(k)}${UI.whoHtml(k)}</span>
-      <span class="gvts">${esc(statusText(k))}</span>
-    </div>`;
-  }
-
   // Before a goal with open tasks becomes Behaald: the question what happens with those tasks.
   function achieveQuestionHtml(st) {
     const how = gv.achHow;
@@ -155,19 +138,17 @@ const Goals = (() => {
 
   function drawView() {
     const g = Store.goal(gv.id); if (!g) { gv.dlg.close(); return; }
-    const st = Store.goalStats(g);
-    const tasks = Store.tasks().filter(k => k.goalId === g.id)
-      .sort((a, b) => LIST_ORDER[Store.listOf(a)] - LIST_ORDER[Store.listOf(b)]);
-    const rows = tasks.map(k => taskRowHtml(k, g)).join('');
+    const st = Store.goalStats(g), lists = GoalTasks.listsHtml(g);
     gv.dlg.innerHTML = html`${viewHeadHtml(g)}
       ${goalFieldsHtml(g, st)}
-      ${tasks.length ? viewField(t('goal.tasks_n', { n: tasks.length }), `<div class="gvlist">${rows}</div>`) : ''}
+      ${lists ? viewField(t('goal.tasks_n', { n: st.total }), lists) : ''}
       ${gv.confirmAch ? achieveQuestionHtml(st) : viewActionsHtml(g)}`;
   }
 
   function openView(id) {
     const dlg = UI.dialog({ cls: 'wide gvw', closeOutside: () => !!gv && !gv.editing, onClose: () => { gv = null; } });
     gv = { dlg, id, editing: false, confirmAch: false, achHow: null };
+    GoalTasks.reset(id);
     dlg.addEventListener('click', onViewClick);
     drawView();
   }
@@ -190,6 +171,7 @@ const Goals = (() => {
     const v = gv, g = Store.goal(v.id); if (!g) return;
     const has = sel => e.target.closest(sel);
     if (has('[data-gvclose]')) { v.dlg.close(); return; }
+    if (GoalTasks.click(e, () => v.dlg.close())) { drawView(); return; }
     if (has('[data-gvedit]')) { editInView(); return; }
     if (has('[data-gvre]')) { await UI.act(() => Store.reopenGoal(g.id)); return; }
     if (has('[data-gvach]')) {
@@ -450,6 +432,7 @@ const Goals = (() => {
   }
 
   function init() {
+    GoalTasks.init();
     $('btnGoalNew').onclick = () => openForm(null);
     $('gShowAch').onchange = e => { View.showAchieved = e.target.checked; View.save(); render(); };
     $('goalsList').onclick = e => {

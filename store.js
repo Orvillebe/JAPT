@@ -12,6 +12,8 @@
  *     deleted, block changes from today, work period changes, the Bin
  *   - The rules on what may be saved (a task needs a goal, names are unique, ...): screens ask first
  *     (the ...Problems functions) to show it at the field; the actions refuse the same with a RuleError
+ *   - Photos: which a task has (task_photos) is in memory; a photo itself is saved with its task and read
+ *     one at a time (photo)
  *
  * Screens read and write only through the Store; they never see the data layer.
  * Pure rules live in model.js; what each rule means is in docs/design.md.
@@ -89,7 +91,9 @@ const Store = (() => {
   const find = (table, id) => raw[table].find(r => r.id === id) || null;
 
   // The change that undoes this one, as things are now; null when there is nothing to undo.
+  // A photo itself (photo_data) is not in memory: it goes when its task_photos row is undone.
   function oppositeOf(o) {
+    if (!raw[o.table]) return null;
     if (o.op === 'insert') return { op: 'remove', table: o.table, id: o.row.id };
     const old = find(o.table, o.id);
     if (o.op === 'remove') return old ? { op: 'insert', table: o.table, row: old } : null;
@@ -101,6 +105,7 @@ const Store = (() => {
   }
   // Memory takes over the row as it was stored; a removed or binned row leaves memory.
   function followInMemory(o, row) {
+    if (!raw[o.table]) return;
     const id = o.op === 'insert' ? o.row.id : o.id, rows = raw[o.table], at = rows.findIndex(r => r.id === id);
     if (o.op === 'remove' || !row || (BINNED_TABLES.includes(o.table) && row.deletedAt)) {
       if (at >= 0) rows.splice(at, 1);
@@ -252,6 +257,10 @@ const Store = (() => {
   const periodSetting = ds => M.periodIn(ds, segments());   // also while switched off
   const blocksOn = ds => M.blocksOn(raw.work_blocks, ds);
   const calendarUrl = () => { const c = raw.calendars.find(x => !x.owner); return c ? c.url || '' : ''; };
+  // The photos of a task, oldest first: {id, width, height}. The photo itself: photo(id), a JPEG or null.
+  const photosOf = taskId => raw.task_photos.filter(p => p.taskId === taskId)
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+  const photo = id => DataService.loadPhoto(id);
   const plannedFromToday = blockId =>
     raw.block_placements.filter(p => p.blockId === blockId && p.date >= td() && task(p.taskId)).length;
 
@@ -328,6 +337,15 @@ const Store = (() => {
     ...fields, stage, deadline, repeat: deadline ? repeat : null, position: lastPosition(stage)
   });
   const peopleOps = (taskId, who) => who.map(m => ins('task_members', { taskId, memberId: m }));
+  // Photos added and taken off in a form: {add: [{id, data (JPEG as base64), width, height}], remove: [id]}.
+  // A photo goes in the same save as its task, so they are stored together or not at all.
+  const photoOps = (taskId, { add = [], remove = [] } = {}) => [
+    ...remove.filter(id => find('task_photos', id)).map(id => del('task_photos', id)),
+    ...add.flatMap(({ id, data, width, height }) => [
+      { op: 'insert', table: 'task_photos', row: { id, taskId, width, height } },
+      { op: 'insert', table: 'photo_data', row: { id, data } }
+    ])
+  ];
   // Who on a task: the changes from the current members to the wanted ones.
   function whoOps(taskId, wanted) {
     const cur = raw.task_members.filter(r => r.taskId === taskId), ops = [];
@@ -366,7 +384,8 @@ const Store = (() => {
     const nx = k.nextTaskId && task(k.nextTaskId);
     if (nx && !nx.doneOn) {   // the next repeat goes away again, unless it was already done
       const people = raw.task_members.filter(r => r.taskId === nx.id).map(r => del('task_members', r.id));
-      ops.push(...outOfAllPlans(nx.id), ...people, del('tasks', nx.id));
+      const photos = photosOf(nx.id).map(p => del('task_photos', p.id));
+      ops.push(...outOfAllPlans(nx.id), ...people, ...photos, del('tasks', nx.id));
       fields.nextTaskId = null;
     }
     if (k.goalId == null) { ops.push(...toInboxOps(k)); notes.push('inbox'); return { ops, notes }; }
@@ -381,17 +400,17 @@ const Store = (() => {
   /* ---------- tasks ---------- */
 
   async function createTask(fields) {
-    const { title, note = '', goalId = null, who = [], deadline = null, repeat = null, stage = STAGE.OPEN } = fields;
+    const { title, note = '', goalId = null, who = [], deadline = null, repeat = null, stage = STAGE.OPEN, photos } = fields;
     refuse(taskProblems({ title, goalId }, stage));
     const row = taskRow({ title, note, goalId, stage, deadline, repeat });
-    return run({ ops: [{ op: 'insert', table: 'tasks', row }, ...whoOps(row.id, who)] });
+    return run({ ops: [{ op: 'insert', table: 'tasks', row }, ...whoOps(row.id, who), ...photoOps(row.id, photos)] });
   }
-  async function updateTask(id, { title, note, goalId, who, deadline, repeat }, seenAt) {
+  async function updateTask(id, { title, note, goalId, who, deadline, repeat, photos }, seenAt) {
     const k = task(id);
     refuseIfGone(k, 'title', 'form.gone_task');
     refuse(taskProblems({ title, goalId }, k.stage));
     const fields = { title, note, goalId, deadline, repeat: deadline ? repeat : null };
-    const ops = [upd('tasks', id, fields, seenAt), ...whoOps(id, who)];
+    const ops = [upd('tasks', id, fields, seenAt), ...whoOps(id, who), ...photoOps(id, photos)];
     // A task moved into an achieved goal reopens that goal.
     const newGoal = goalId !== k.goalId && goal(goalId);
     if (newGoal && newGoal.achievedOn) ops.push(upd('goals', goalId, { achievedOn: null }));
@@ -499,11 +518,11 @@ const Store = (() => {
 
   // One self-contained save that may safely be sent twice: the queue for adding without a
   // connection will sit here (docs/design.md, Inbox; Possible future).
-  async function addInboxTask({ title, note = '', goalId = null, who = [], deadline = null, repeat = null }) {
+  async function addInboxTask({ title, note = '', goalId = null, who = [], deadline = null, repeat = null, photos }) {
     const knownGoal = goalId && goal(goalId) ? goalId : null;
     const row = taskRow({ title, note, goalId: knownGoal, stage: STAGE.INBOX, deadline, repeat });
     const insert = { op: 'insert', table: 'tasks', row };
-    const ops = [insert, ...peopleOps(row.id, who)].map(o => ({ ...o, ifNew: true }));
+    const ops = [insert, ...peopleOps(row.id, who), ...photoOps(row.id, photos)].map(o => ({ ...o, ifNew: true }));
     return { id: row.id, ...(await run({ ops })) };
   }
   // Verwerken: to a goal's In te plannen or Backlog, checked off, or to the Bin.
@@ -755,7 +774,7 @@ const Store = (() => {
     setting, periodActive, periodSetUp,
     idx, task, goal, client, member, whoOf, members, allMembers, clients, goals, openGoals, tasks, inbox, clientOfTask,
     listOf, shownList, dueSoon, isLate, itemsOf, goalStats, blocks, segments, periodAt, periodSetting, blocksOn,
-    calendarUrl, plannedFromToday, clientNamed, openTasksOf,
+    calendarUrl, plannedFromToday, clientNamed, openTasksOf, photosOf, photo,
     taskProblems, goalProblems, clientProblems, memberProblems, calendarUrlProblems, blockProblems, periodProblems,
     loadBin,
     ...Object.fromEntries(Object.entries(ACTIONS).map(([name, action]) => [name, oneAtATime(action)]))

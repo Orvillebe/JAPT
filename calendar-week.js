@@ -33,7 +33,7 @@ const CalendarWeek = (() => {
     return html`
       <div class="${classes}" ${dragAttrs} style="${UI.taskStyle(k)}">
         <div class="ct">
-          ${UI.chk(k)}<span class="t">${esc(k.title)}</span><span class="cside">${UI.whoHtml(k)}${side}</span>
+          ${UI.chk(k)}<span class="t">${esc(k.title)}</span><span class="cside">${Photos.mark(k)}${UI.whoHtml(k)}${side}</span>
         </div>
         ${after}${UI.metaLine(k)}
       </div>`;

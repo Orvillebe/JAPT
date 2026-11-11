@@ -9,6 +9,8 @@
  *   - Hiding binned records in one place: loadAll() never returns them
  *   - Upgrading stored data to the current version, the local mirror of migrations/ (LOCAL_MIGRATIONS)
  *   - Importing a backup file, for testing a new version on a copy of real data
+ *   - Photos (photo_data) under a key of their own, so the rest isn't read and written with them every time.
+ *     localStorage holds about 5 MB: some 30 photos. Enough for testing; a save that doesn't fit is refused.
  *
  * Used everywhere except on the live address (productionHosts in deployment.js), so local testing never
  * touches the real database. There is no login: everything is saved as one local member.
@@ -17,6 +19,7 @@
 
 function createLocalData() {
   const KEY = 'japt_local_v1';
+  const PHOTOS_KEY = 'japt_local_photos_v1';   // {id: JPEG as base64}
   const ME = 'local-user';
   const LOCAL_TABLES = [...TABLES, 'test_meetings'];   // meetings from the test data, only here
   const now = () => new Date().toISOString();
@@ -29,7 +32,8 @@ function createLocalData() {
     2: () => {},   // migration 002 only adds a check to the real database
     3: () => {},   // migration 003 adds an optional field
     4: () => {},   // migration 004 only hardens the real database
-    5: () => {}    // migration 005 only notes removals in the real database
+    5: () => {},   // migration 005 only notes removals in the real database
+    6: db => { db.task_photos = db.task_photos || []; }
   };
 
   function upgrade(db) {
@@ -61,13 +65,29 @@ function createLocalData() {
     const db = seed(); write(db); return db;
   }
   function write(db) { localStorage.setItem(KEY, JSON.stringify(db)); }
+  function readPhotos() {
+    try { return JSON.parse(localStorage.getItem(PHOTOS_KEY)) || {}; } catch (e) { return {}; }
+  }
+  const writePhotos = photos => localStorage.setItem(PHOTOS_KEY, JSON.stringify(photos));
+  // Both or neither: when the data doesn't fit after the photos were written, the photos go back.
+  function writeBoth(db, photos, photosBefore) {
+    writePhotos(photos);
+    try { write(db); } catch (e) { writePhotos(photosBefore); throw e; }
+  }
 
   class Conflict extends Error {
     constructor(table, id) { super(`Changed meanwhile: ${table} ${id}`); this.code = 'conflict'; }
   }
 
   // Apply one change to db. Throws on a missing row or a conflict, so the whole batch is refused.
-  function applyOp(db, o, at) {
+  // A photo only arrives (photo_data) and leaves with its task_photos row.
+  function applyOp(db, photos, o, at) {
+    if (o.table === 'photo_data') {
+      if (o.op !== 'insert') throw new Error('A photo is only added');
+      if (!(o.ifNew && photos[o.row.id])) photos[o.row.id] = o.row.data;
+      return { id: o.row.id };
+    }
+    if (o.table === 'task_photos' && o.op === 'remove') delete photos[o.id];
     const rows = db[o.table];
     if (!rows) throw new Error('Unknown table ' + o.table);
     if (o.op === 'insert') {
@@ -121,10 +141,18 @@ function createLocalData() {
     //   {op:'upsert', table, id, fields}   {op:'remove', table, id, ifChangedAt?}
     // Returns the stored rows (null for removals), in the same order.
     async batch(ops) {
-      const db = read(), at = now();
-      const out = ops.map(o => applyOp(db, o, at));
-      write(db);
+      const db = read(), at = now(), before = readPhotos(), photos = { ...before };
+      const out = ops.map(o => applyOp(db, photos, o, at));
+      writeBoth(db, photos, before);
       return copy(out);
+    },
+
+    // One photo as a JPEG, or null when it is gone.
+    async loadPhoto(id) {
+      const data = readPhotos()[id];
+      if (!data) return null;
+      const bytes = Uint8Array.from(atob(data), ch => ch.charCodeAt(0));
+      return new Blob([bytes], { type: 'image/jpeg' });
     },
 
     // Remove for good what has been in the Bin longer than the bin period.
@@ -137,7 +165,9 @@ function createLocalData() {
       const gone = new Set(db.tasks.filter(old).map(k => k.id));
       for (const t of BINNED_TABLES) db[t] = db[t].filter(r => !old(r));
       for (const t of TASK_TABLES) db[t] = db[t].filter(r => !gone.has(r.taskId));
-      write(db);
+      const before = readPhotos(), photos = { ...before };
+      Object.keys(photos).filter(id => !db.task_photos.some(p => p.id === id)).forEach(id => delete photos[id]);
+      writeBoth(db, photos, before);
     },
 
     async schemaVersion() { return read().schemaVersion; },
@@ -146,19 +176,28 @@ function createLocalData() {
     // Meetings for testing without an agenda link (tests/testdata.js).
     async testMeetings() { return copy(read().test_meetings); },
 
-    // Everything, exactly as stored, for the backup export.
-    async exportAll() { const db = copy(read()); delete db.schemaVersion; delete db.test_meetings; return db; },
+    // Everything, exactly as stored, for the backup export; the photos as {id, data} with base64.
+    async exportAll() {
+      const db = copy(read()); delete db.schemaVersion; delete db.test_meetings;
+      db.photo_data = Object.entries(readPhotos()).map(([id, data]) => ({ id, data }));
+      return db;
+    },
 
     // Testing only: replace the local data with a data set or a backup, then upgrade it.
-    importBackup(backup) { const db = this.upgradeBackup(backup); write(db); return db; },
+    importBackup(backup) {
+      const db = this.upgradeBackup(backup);
+      writeBoth(db, Object.fromEntries((backup.data.photo_data || []).map(p => [p.id, p.data])), readPhotos());
+      return db;
+    },
     upgradeBackup(backup) {
       const db = { ...copy(backup.data), schemaVersion: backup.schemaVersion || 0 };
       delete db.schema_migrations;
+      delete db.photo_data;
       upgrade(db);
       LOCAL_TABLES.forEach(t => { db[t] = db[t] || []; });
       return db;
     },
-    clear() { localStorage.removeItem(KEY); }
+    clear() { localStorage.removeItem(KEY); localStorage.removeItem(PHOTOS_KEY); }
   };
 }
 

@@ -42,7 +42,8 @@ All are `async` unless noted.
 | `loadBin()` | `{clients, goals, tasks}` that are in the Bin |
 | `batch(ops)` | See below |
 | `purgeBin(beforeIso)` | Removes for good what went to the Bin before that moment, and what belongs to those tasks. A task not in the Bin and not done, whose goal is in the Bin, goes to the Inbox (`goalId` null, `stage` `'inbox'`) |
-| `exportAll()` | `{table: rows}` with everything, also what is in the Bin, for the backup |
+| `loadPhoto(id)` | One photo as a JPEG `Blob`, or `null` when it is gone. Not in `loadAll()`: photos are read one at a time, when shown |
+| `exportAll()` | `{table: rows}` with everything, also what is in the Bin, for the backup; and `photo_data: [{id, data}]`, every photo as base64 |
 | `testMeetings()` | Meetings for testing without an agenda link; `[]` is fine |
 
 ## `batch(ops)`
@@ -63,3 +64,5 @@ Returns the stored rows in the same order, `null` for a removal.
 **No answer:** when you can't know whether a save was stored (the connection fell away, the time ran out), throw an error with `code: 'no-answer'`. The screens then reload before anyone tries again. Give every request a time limit: saves wait their turn, so one that never answers holds up everything after it. `data-supabase.js` stops a request after `requestSeconds` in `config.js`.
 
 A batch can add a row and refer to it in any order.
+
+**Photos:** `{op: 'insert', table: 'photo_data', row: {id, data}}` adds a photo, `data` being the JPEG as base64, in the same batch as its `task_photos` row with the same id. Store it as you like; give it back through `loadPhoto(id)`. What a batch returns for it must not hold the photo. A photo is never updated: removing its `task_photos` row removes it, and so does removing its task for good (`purgeBin`).

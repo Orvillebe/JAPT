@@ -64,11 +64,16 @@ function rowsFor(team) {
     ['block_placements', { id: id('bp'), task_id: id('task'), block_id: id('block'), on_date: '2026-11-09' }, { position: 99 }],
     ['period_segments', { id: id('seg'), from_date: '2026-11-02', length: 14, unit: 'd' }, { length: 7 }],
     ['period_placements', { id: id('pp'), task_id: id('task'), period_start: '2026-11-02' }, { position: 99 }],
+    ['task_photos', { id: id('photo'), task_id: id('task'), width: 10, height: 10 }, { width: 11 }],
     ['calendars', { id: id('cal'), name: 'Agenda', url: 'https://x.test/geheim.ics' }, { name: 'aangevallen' }],
     ['app_settings', { id: id('setting'), value: 1 }, { value: 2 }]
   ];
 }
-const seedOps = team => rowsFor(team).map(([table, row]) => ({ op: 'insert', table, row, if_new: true }));
+const PHOTO = '/9j/4AECA//Z';   // a few bytes as base64; the database stores what it gets
+const seedOps = team => [
+  ...rowsFor(team).map(([table, row]) => ({ op: 'insert', table, row, if_new: true })),
+  { op: 'insert', table: 'photo_data', row: { id: `${team}-photo`, data: PHOTO }, if_new: true }
+];
 const clearOps = team => rowsFor(team).reverse().map(([table, row]) => ({ op: 'remove', table, id: row.id }));
 
 const loginIds = {};
@@ -173,6 +178,29 @@ async function attack(a, b) {
   check('removed_rows: nothing without logging in', refused(r) || empty(r), r);
   r = await rpc(null, 'changes_since', { p_team: TEAM_B, p_since: null });
   check('What changed needs a login', refused(r), r);
+
+  // The photos themselves (migrations/006): read as bytes, never by another team.
+  const photoB = `/rest/v1/photo_data?select=data&team_id=eq.${TEAM_B}&id=eq.${TEAM_B}-photo`;
+  r = await call(b, 'GET', photoB, undefined, { Accept: 'application/octet-stream' });
+  check("B reads its own photo as bytes", r.ok && typeof r.data === 'string' && r.data.length > 0, r);
+  r = await call(a, 'GET', photoB, undefined, { Accept: 'application/octet-stream' });
+  check("A can't read B's photo", !r.ok || !r.data, r);
+  r = await call(a, 'GET', `/rest/v1/photo_data?team_id=eq.${TEAM_B}`);
+  check("A can't read B's photos as rows", empty(r), r.data);
+  r = await rpc(a, 'photos_for_backup', { p_team: TEAM_B, p_after: null, p_count: 20 });
+  check("A gets none of B's photos for a backup", r.ok && Array.isArray(r.data) && r.data.length === 0, r.data);
+  r = await rpc(b, 'photos_for_backup', { p_team: TEAM_B, p_after: null, p_count: 20 });
+  check("B gets its own photo for a backup", r.ok && r.data.length === 1 && r.data[0].data === PHOTO, r.data);
+  r = await call(a, 'POST', '/rest/v1/photo_data', { team_id: TEAM_B, id: `${TEAM_B}-photo2`, data: '\\x00' }, RETURN_ROWS);
+  check("A can't add a photo to B", refused(r), r);
+  r = await batch(a, TEAM_B, [{ op: 'insert', table: 'photo_data', row: { id: `${TEAM_B}-photo3`, data: PHOTO } }]);
+  check("A can't add a photo to B through the save function", refused(r), r);
+  r = await call(b, 'PATCH', `/rest/v1/photo_data?team_id=eq.${TEAM_B}&id=eq.${TEAM_B}-photo`, { data: '\\x00' }, RETURN_ROWS);
+  check("Nobody changes a photo, also not of the own team", refused(r) || empty(r), r);
+  r = await call(b, 'DELETE', `/rest/v1/photo_data?team_id=eq.${TEAM_B}&id=eq.${TEAM_B}-photo`, undefined, RETURN_ROWS);
+  check("A photo goes only with its task_photos row", refused(r) || empty(r), r);
+  r = await call(null, 'GET', '/rest/v1/photo_data?select=id');
+  check("photo_data: nothing without logging in", refused(r) || empty(r), r);
 
   // Without logging in.
   r = await call(null, 'GET', '/rest/v1/teams?select=id');

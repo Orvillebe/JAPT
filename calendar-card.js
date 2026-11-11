@@ -53,7 +53,7 @@ const CalendarCard = (() => {
         ${UI.chk(k)}<b>${esc(k.title)}</b>${UI.whoHtml(k)}
         <button type="button" class="pen" data-edit="${id}" title="${t('task.edit')}">✎</button>
       </div>
-      ${k.note ? `<div class="pd">${esc(k.note)}</div>` : ''}${UI.metaLine(k)}
+      ${k.note ? `<div class="pd">${esc(k.note)}</div>` : ''}${Photos.cardHtml(id)}${UI.metaLine(k)}
       ${blocks.length > 1 ? popAlsoOnHtml(others) : ''}`;
   }
   // Over the task, in the column around it; pushed left when it would stick out of the calendar.
@@ -81,6 +81,7 @@ const CalendarCard = (() => {
     card.dataset.task = id;
     card.innerHTML = popHtml(k, id, blocks, others);
     placeCard(el);
+    Photos.fill(card);
   }
   // After a jump, a chip of the marked task in another place than the one jumped to.
   function isElsewhere(el) {

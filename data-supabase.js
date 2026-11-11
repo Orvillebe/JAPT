@@ -8,6 +8,7 @@
  *   - Translating between database columns and app fields
  *   - Hiding binned rows in one place: loadAll never returns them
  *   - Reloading only what changed since the previous load (changes_since in migrations/005)
+ *   - Photos: sent as base64 inside the save of their task, read back one at a time as bytes (migrations/006)
  *
  * Everything that knows about Supabase is in this file and in migrations/. What you may reach is decided
  * in the database (Row Level Security), not here.
@@ -171,9 +172,39 @@ function createSupabaseData() {
       check(error);
     },
 
+    // One photo as a JPEG, or null when it is gone. Asked as bytes (Accept: application/octet-stream), not
+    // through the library: as JSON a photo would come as text, a third or twice as large.
+    async loadPhoto(id) {
+      const { data: { session } } = await sb.auth.getSession();
+      const url = `${JAPT_DEPLOYMENT.supabaseUrl}/rest/v1/photo_data?select=data`
+        + `&team_id=eq.${encodeURIComponent(teamId)}&id=eq.${encodeURIComponent(id)}`;
+      let answer;
+      try {
+        answer = await fetchWithLimit(url, { headers: {
+          apikey: JAPT_DEPLOYMENT.supabaseKey,
+          Authorization: `Bearer ${session ? session.access_token : JAPT_DEPLOYMENT.supabaseKey}`,
+          Accept: 'application/octet-stream'
+        } });
+      } catch (e) {
+        throw Object.assign(new Error(e.message), { code: 'no-answer' });
+      }
+      if (!answer.ok) throw Object.assign(new Error(`Photo ${id}: ${answer.status}`), { code: String(answer.status) });
+      const blob = await answer.blob();
+      return blob.size ? new Blob([blob], { type: 'image/jpeg' }) : null;
+    },
+
+    // Everything for the backup; the photos as {id, data} with base64, a page at a time.
     async exportAll() {
       const rows = await Promise.all(TABLES.map(t => all(t)));
-      return Object.fromEntries(TABLES.map((t, i) => [t, rows[i]]));
+      const out = Object.fromEntries(TABLES.map((t, i) => [t, rows[i]]));
+      out.photo_data = [];
+      for (let after = null; ;) {
+        const { data, error } = await sb.rpc('photos_for_backup', { p_team: teamId, p_after: after, p_count: 20 });
+        check(error);
+        out.photo_data.push(...data);
+        if (data.length < 20) return out;
+        after = data[data.length - 1].id;
+      }
     },
 
     // Only the local version has meetings without an agenda link.

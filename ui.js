@@ -162,7 +162,7 @@ const UI = (() => {
       <div class="${classes}" draggable="true" data-task="${k.id}" style="${taskStyle(k)}">
         ${chk(k)}
         <div class="body">
-          <div class="trow"><div class="title">${esc(k.title)}</div><div class="who">${whoHtml(k)}</div></div>
+          <div class="trow"><div class="title">${esc(k.title)}</div><div class="who">${Photos.mark(k)}${whoHtml(k)}</div></div>
           ${note}${metaLine(k)}${noPlan ? '' : planLinks(k)}
         </div>
         <div class="acts">${pen}${extra}</div>

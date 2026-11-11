@@ -1,6 +1,6 @@
 # JAPT - Just A Planning Tool
 
-Weekly planning for a small agency team. Tasks hang under goals, goals under clients (or *Intern*). You collect tasks in the Inbox, give them a goal, and drag them into the team's standard work blocks or into a longer work period. Meetings from the team's kSuite agenda (its link is a setting in Beheer) show between the blocks. Static site, no build step.
+Weekly planning for a small agency team. Tasks hang under goals, goals under clients (or *Intern*). You collect tasks in the Inbox (with photos in the note if you like), give them a goal, and drag them into the team's standard work blocks or into a longer work period. Meetings from the team's kSuite agenda (its link is a setting in Beheer) show between the blocks. Static site, no build step.
 
 **Status: works against its own Supabase database, not live yet.** Everything in the mockup works, plus the Bin, the three looks, the agenda link, backup and analysis export, logins and teams. A test of the whole thing with a real mouse and phone is still to come.
 
@@ -43,6 +43,12 @@ The free Supabase plan has no restorable backups, so the file from Beheer > Back
 2. Open `tools/restore.html`, fill in the team and choose the file. It stays in your browser.
 3. Paste the script in the **SQL Editor** and run it. The counts at the end should match the first lines of the script.
 
+**With many photos** the script gets too large to paste (each photo is about 160 kB in it). Save it with *Bewaren als .sql* instead and run it from your own computer with `psql` and the connection string from Supabase (Connect > Session pooler), with the database password you keep:
+
+```bash
+psql "postgresql://postgres.<project>:<password>@<host>:5432/postgres" -f japt-restore.sql
+```
+
 By default the script only goes into an empty team, and otherwise stops without changing anything. **To put an older state back over a team that holds planning,** tick *Vervang wat nu in dit team staat*. Wiping and restoring then happen in one transaction: if anything fails, the team stays as it was. If it succeeds, everything made after the backup is gone, so make a backup of the current state first.
 
 Someone from the backup is matched to someone in the team by login, or else by name. Without a match they come back without a login; link them in Table Editor > `members`. The agenda link comes back too, so keep a backup file as safe as the agenda itself.
@@ -62,6 +68,7 @@ The app compares its database version with the database when it starts (`SCHEMA_
 ## Privacy
 
 - Your planning is stored in your own Supabase project. The agenda link is a setting in that database and is never in the code.
+- Photos on tasks are stored in that same database, only readable by your team. They are made smaller in your browser first, which also leaves out what a camera writes into a photo, such as where it was taken.
 - No telemetry and no analytics. Personal view settings (filters, folded lists, the look) stay on the device.
 - The browser fetches the agenda straight from the agenda link, the fonts from Google Fonts, and two scripts from jsDelivr. Those scripts are pinned with an integrity hash, so a changed file is refused.
 - Row Level Security in the database keeps teams apart; `tests/teams.test.js` proves it.
@@ -155,6 +162,7 @@ One file per task; each file starts with what it is responsible for.
 | `calendar-week.js`, `calendar-period.js`, `calendar-list.js`, `calendar-card.js` | The day and week views, the work-period view, the list view, the open task card |
 | `tasks.js` | Taken page, left: the task lists and the form |
 | `goals.js`, `inbox.js` | Doelen, Inbox |
+| `photos.js` | Photos on a task: the note field with its camera button, making a photo smaller, the row of photos, full screen |
 | `manage.js` | The Beheer window: tabs and drawing |
 | `manage-blocks.js`, `manage-period.js`, `manage-other.js` | The tabs Werkblokken and Werkperiode; the seven small tabs |
 | `agenda.js`, `export.js` | Meetings from the agenda link; backup and analysis export |
@@ -172,6 +180,7 @@ Not built, but prepared for. Each can be added without changing the data that ex
 - **One agenda per person** instead of one shared team agenda.
 - **An installable app (PWA)**, so week views can open in landscape on a phone.
 - **Adding to the Inbox without a connection:** new Inbox tasks wait on the phone and are sent once there is a connection. The first version is already built for it (ids made in the app, one save per Inbox task that can safely be sent twice); what's left is the queue and a service worker, built together with the installable app.
+- **Sharing a photo to JAPT from an Android phone**, straight into a new Inbox task. Needs the installable app above and a small service worker. Not possible on iPhone.
 - **Live updates** when a colleague changes something. The first version loads their changes when the app opens, when you come back to the tab, and when you move to another day or week.
 - **A second interface language.**
 - **More users: many small teams, not bigger teams.** The use case is an agency or a freelancer, and many of those, not the multinational. The database has a team on every row from the start, and teams are kept apart; signing up, creating teams from the app, inviting from the app and paying are not built.

@@ -19,6 +19,7 @@ How JAPT works and why: users and hosting, the data model, the rules, and how th
 - **A new task has nobody on it** unless you choose someone, as in the mockup. Putting your own name on it automatically is a possible future step.
 - **Analysis export** for an AI, as in JAFT, in Beheer.
 - **No planning history:** a task taken out of a past block is simply gone from that day.
+- **Photos on a task** (decided 2026-11-11): part of the note, taken or pasted without leaving JAPT, stored small in the database itself (see *Photos*).
 
 - **Colleagues' changes** are loaded when the app opens, when the tab comes back into view, and when you move to another day, week or period (see *Working at the same time*). Live updates are *Possible future*.
 
@@ -123,6 +124,8 @@ As built in `migrations/001_initial.sql`. Keys are `(team_id, id)`, ids are made
 | `period_placements` | A task in a work period, without day or hour (`period_start`, `task_id`, `position`). The mockup's `S.plan['cy@2026-11-02']`. |
 | `calendars` | The agendas meetings come from: name, link (`url`) and `owner` (empty = the team). Set in Beheer. Readable only by members on the access list. One row for now. |
 | `app_settings` | Settings shared within a team: first day of the week, deadline reminder days, work period on or off. One row per team and setting (key `team_id` + `id`). |
+| `task_photos` | Which photos a task has: `task_id`, `width` and `height` (migration 006). Loaded with everything else, so the planning knows a task has photos and a row of them can be drawn before they are read. |
+| `photo_data` | The photo itself, a JPEG as bytes (`data`), one row per `task_photos` row with the same id. Never loaded with the rest: read one at a time when a task is opened. Goes when its `task_photos` row goes, never changed. At most 1 MB. |
 | `removed_rows` | Which rows were removed, and when, for 30 days, so a reload can ask what is gone (migration 005). Written only by the database. |
 | `schema_migrations` | Which migrations have run. |
 
@@ -286,6 +289,21 @@ Decided on 2026-11-09: one shared database and one version of the software for e
 - **Assumption on contents:** one block per goal with its client, note, achieved date and its tasks; per task the title, note, who (names), deadline and repeat, done date, current list, and every day and work period it is planned in. Plus the work blocks per week, the work period setting and the export date. Readable labels instead of codes, free text as typed.
 - **Left out:** the Bin and the meetings (they belong to the agenda, not to JAPT).
 
+### Photos
+
+- **Part of the note, not a field of their own.** The note field holds a camera button, bottom right inside the field, and the photos as a row under the text. Every row of a form keeps the same shape (a label, then a field); a button beside the label made one row taller than the others.
+- **Adding:** the camera button, as often as you like. On a phone it opens the phone's own choice (take a photo, photo library, file): taking one stays inside JAPT. On a laptop also pasting (Cmd+V, for a screenshot) anywhere in the form, and dropping a file on the note, which lights up while you drag. There is no line of text explaining this: such a line looked like a link.
+- **Where:** the task form and *Toevoegen* in the Inbox.
+- **Taking one off:** a × on the photo. Adding and taking off are saved with *Opslaan*, like the rest of the form; *Annuleren* undoes both.
+- **Seeing:** the task card and the form show the photos as a row of small photos, 72 pixels high, in their own proportions. Large enough to tell which photo it is; to read what is on it you open it. A photo the full width of the card was tried: still too small to read a whiteboard and it made the card two to three times as tall. In the planning a task with photos shows a small mark, left out in a full block where there is no room.
+- **Full screen:** a click on a photo. Close with ×, Esc or a click beside it; Esc closes the photo before the card under it. With more photos: arrows, the arrow keys, or swiping (no arrows on a touch screen). Zooming in on a phone with two fingers.
+- **Size:** made smaller in the browser before saving, the long side at most 1200 pixels, JPEG quality 0.7 (`photoMaxSide`, `photoQuality` in `config.js`). About 120 kB for a photo of a whiteboard. Compared on a real whiteboard photo: 600 pixels was just readable and blurry on a tablet (the photo is stretched more than twice there); 1000 and 1200 were both readable. Drawing the photo again also leaves out what a camera writes into it, such as where it was taken. A transparent part of a screenshot becomes white.
+- **Stored in the database, as bytes.** Not in Supabase Storage: a photo is then private through the same rule as everything else (only your own team), goes with its task when that is removed for good, and is in the backup. On its way in it is base64 inside the save of its task, a third larger, so a task and its photos are saved together or not at all; what is sent to Supabase doesn't count towards its limit. On its way out it is read as bytes (`Accept: application/octet-stream`), not as text. Compared: base64 kept in the database would fill it about 9 months sooner.
+- **Read only when shown,** one at a time, then kept for the rest of the session. Loading the planning and reloading changes never carry photos.
+- **How long the free database lasts:** 500 MB, at about 160 kB per photo with everything around it, five photos per working day: about three years. Two a day: about seven. After that the paid plan (8 GB) or clearing photos of old finished tasks. The Supabase dashboard shows the size.
+- **Not carried to the next repeat:** checking off a repeating task makes the next one without its photos. Copying them would double them in the database.
+- **Locally** (testing) photos are kept in the browser beside the rest, about 30 fit; a save that doesn't fit is refused.
+
 ## 6. Interface decisions (from the mockup)
 
 - **Views:** Taken (calendar with Dag, Werkweek, Week, Werkperiode, Lijst), Doelen, Inbox. Beheer is a dialog with Werkblokken, Werkperiode, Deadlines, Week, Gebruikers, and (new) Agenda (the agenda link), Prullenbak, Weergave (theme), Back-up with the analysis export, and the app and database version.
@@ -320,6 +338,7 @@ Not built, but prepared for. Each can be added without changing the data that ex
   - *A queue on the phone:* `addInboxTask` keeps new tasks in the browser's storage and sends them once there is a connection, and when the app starts. A small line shows "2 nog niet verstuurd". An expired login keeps the queue waiting until you log in again.
   - *A service worker* that keeps the app's own files (never the data) on the phone, so JAPT opens without a connection. Without it, offline adding only works when JAPT was already open in a tab, and phones often reload a tab in the background. It is the same piece as the installable app above, so both are built together. Every release then also updates the service worker's file list; the version check catches a phone that keeps an old copy.
   - *Only adding.* Editing or planning offline would need rules for conflicts with colleagues first, a much bigger step.
+- **Sharing a photo to JAPT** (Android): JAPT in the phone's share menu, opening *Toevoegen* with the photo ready. It needs the app installed (*App installeren* in Chrome) and a small service worker that only catches the shared photo, because GitHub Pages can't receive it; keeping no files of the app, it can't leave an old version behind. iPhone doesn't let a web app into the share menu.
 - **Live updates** (Supabase Realtime): changes of colleagues within a second instead of at the next move. What it takes is described under *Working at the same time*; the position numbers and the `changed_at` check are already in place.
 - **A second interface language:** all text is already in `i18n/nl.js` by key; it takes a second file and a choice in Beheer.
 - **More users: many small teams, not bigger teams.** If JAPT is ever opened up, it grows in the number of teams, each with one or a few people: an agency or a freelancer, and many of those. The use case is not the multinational, so no departments, no levels of organisation and no thousands of people in one planning. A freelancer is a team of one, not a special case.

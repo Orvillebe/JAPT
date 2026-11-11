@@ -43,7 +43,7 @@ const inPeriod = (id, taskId) => row({ id, taskId, periodStart: PERIOD, position
 async function app(extra) {
   const data = new Map();
   const context = vm.createContext({
-    console, crypto: nodeCrypto.webcrypto,
+    console, crypto: nodeCrypto.webcrypto, atob, Blob,
     localStorage: { getItem: k => (data.has(k) ? data.get(k) : null), setItem: (k, v) => data.set(k, String(v)), removeItem: k => data.delete(k) }
   });
   scripts.forEach(s => s.runInContext(context));
@@ -793,6 +793,76 @@ test('when the layer can\'t tell what changed, everything is loaded', async () =
   await w.DS.batch([{ op: 'update', table: 'tasks', id: 'a', fields: { title: 'Elders gewijzigd' } }]);
   await w.S.reload();
   eq(w.S.task('a').title, 'Elders gewijzigd');
+});
+
+/* ---------- photos ---------- */
+
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 0xff, 0xd9]).toString('base64');
+const newPhoto = id => ({ id, data: JPEG, width: 1200, height: 797 });
+const edit = (S, id, photos, extra = {}) =>
+  S.updateTask(id, { title: 'Taak ' + id, note: '', goalId: 'g1', who: [], deadline: null, repeat: null, photos, ...extra });
+const photoBytes = async (S, id) => {
+  const blob = await S.photo(id);
+  return blob ? Buffer.from(await blob.arrayBuffer()).toString('base64') : null;
+};
+
+test('a photo is saved with its task and read back as the same JPEG', async () => {
+  const { S, stored } = await app({ tasks: [task('a')] });
+  await edit(S, 'a', { add: [newPhoto('f1')] });
+  eq(S.photosOf('a').map(p => [p.id, p.width, p.height]), [['f1', 1200, 797]]);
+  eq((await stored('task_photos')).length, 1);
+  eq(await photoBytes(S, 'f1'), JPEG);
+});
+test('a new task and a task in the Inbox take their photos along', async () => {
+  const { S } = await app();
+  await S.createTask({ title: 'Nieuw', goalId: 'g1', photos: { add: [newPhoto('f1'), newPhoto('f2')] } });
+  const { id } = await S.addInboxTask({ title: 'Gezien', photos: { add: [newPhoto('f3')] } });
+  eq(S.photosOf(S.tasks()[0].id).map(p => p.id), ['f1', 'f2']);
+  eq(S.photosOf(id).map(p => p.id), ['f3']);
+});
+test('a photo taken off goes, JPEG and all', async () => {
+  const { S, stored } = await app({ tasks: [task('a')] });
+  await edit(S, 'a', { add: [newPhoto('f1'), newPhoto('f2')] });
+  await edit(S, 'a', { remove: ['f1'] });
+  eq(S.photosOf('a').map(p => p.id), ['f2']);
+  eq(ids(await stored('task_photos')), ['f2']);
+  eq(await photoBytes(S, 'f1'), null);
+});
+test('a refused save stores no photo either', async () => {
+  const { S, DS, stored } = await app({ tasks: [task('a')] });
+  await tick();
+  await DS.batch([{ op: 'update', table: 'tasks', id: 'a', fields: { title: 'Van een collega' } }]);
+  await assert.rejects(edit(S, 'a', { add: [newPhoto('f1')] }), e => e.code === 'conflict');
+  eq(await stored('task_photos'), []);
+  eq(await photoBytes(S, 'f1'), null);
+});
+test('photos stay with a task in the Bin and go when it is removed for good', async () => {
+  const { S, DS, stored } = await app({ tasks: [task('a')] });
+  await edit(S, 'a', { add: [newPhoto('f1')] });
+  await S.binTask('a');
+  eq((await stored('task_photos')).length, 1);
+  await DS.purgeBin('2999-01-01T00:00:00.000Z');
+  eq(await stored('task_photos'), []);
+  eq(await photoBytes(S, 'f1'), null);
+});
+test('the backup holds the photos, and they come back from it', async () => {
+  const { S, DS } = await app({ tasks: [task('a')] });
+  await edit(S, 'a', { add: [newPhoto('f1')] });
+  const backup = { schemaVersion: 6, data: plain(await DS.exportAll()) };
+  eq(backup.data.photo_data, [{ id: 'f1', data: JPEG }]);
+  DS.clear();
+  DS.importBackup(backup);
+  await S.reload();
+  eq(await photoBytes(S, 'f1'), JPEG);
+});
+test('unchecking a repeat takes the next task\'s photos with it', async () => {
+  const { S, stored } = await app({ tasks: [task('a', { deadline: TODAY, repeat: '1:w' })] });
+  await S.setDone('a', true);
+  const next = S.task('a').nextTaskId;
+  await edit(S, next, { add: [newPhoto('f1')] });
+  await S.setDone('a', false);
+  eq(await stored('task_photos'), []);
+  eq(await photoBytes(S, 'f1'), null);
 });
 
 (async () => {

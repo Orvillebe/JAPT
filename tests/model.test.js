@@ -265,4 +265,13 @@ test('a new person gets the first colour nobody has', () => {
   eq(M.freshColour([{ color: M.MEMBER_COLOURS[0] }, { color: M.MEMBER_COLOURS[2] }]), M.MEMBER_COLOURS[1]);
 });
 
+/* ---------- photos ---------- */
+
+test('a photo is made smaller on its long side, keeping its proportions', () => {
+  eq(M.fitWithin(1860, 1236, 1200), { width: 1200, height: 797 });
+  eq(M.fitWithin(3024, 4032, 1200), { width: 900, height: 1200 });   // upright
+  eq(M.fitWithin(800, 600, 1200), { width: 800, height: 600 });      // never larger
+  eq(M.fitWithin(5000, 2, 1200), { width: 1200, height: 1 });        // never zero
+});
+
 console.log(`model tests: ${ok} passed`);

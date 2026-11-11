@@ -8,13 +8,16 @@
  *       stops unless the database is at this version (SCHEMA_VERSION),
  *       stops unless there is exactly one team with that name,
  *       stops if that team already holds planning, unless you chose to replace it,
- *       puts everything back as it was: ids, dates, who made it, what was in the Bin.
+ *       puts everything back as it was: ids, dates, who made it, what was in the Bin, the photos.
  *     All in one transaction: if anything fails, nothing changes. That is why replacing is part of this
  *     script and not a separate step: a team is never left empty by a restore that failed.
  *
  * People: a person from the backup is matched to someone already in the team, by login or else by name, and
  * takes over that login. In a new project logins have new ids, so without a match by name the person comes
  * back without a login; link them in Table Editor > members.
+ *
+ * Photos make the script large (about 160 kB each): too large for the SQL Editor after some months. Then run
+ * the saved .sql file with psql instead (README, Restoring a backup).
  *
  * Pure: no DOM and no network, so tests/restore.test.js can check it. tools/restore.html is the page.
  */
@@ -54,7 +57,8 @@ function buildRestoreSql(backup, upgradeBackup, schemaVersion, typedTeamName, { 
     period_segments: { id: 'T', from_date: 'd', length: 'N', unit: 'T' },
     period_placements: { id: 'T', task_id: 'T', period_start: 'd', position: 'N' },
     calendars: { id: 'T', name: 'T', url: 'T', owner: 't' },
-    app_settings: { id: 'T', value: 'j' }
+    app_settings: { id: 'T', value: 'j' },
+    task_photos: { id: 'T', task_id: 'T', width: 'N', height: 'N' }
   };
   const PLANNING_TABLES = ['clients', 'goals', 'tasks', 'work_blocks', 'period_segments', 'calendars'];
 
@@ -118,8 +122,16 @@ function buildRestoreSql(backup, upgradeBackup, schemaVersion, typedTeamName, { 
     `select (select id from restore_team), ${columnList(MEMBER_COLUMNS)} from restore_members;`
   ];
 
-  const countOf = t => (db[t] || []).length;
-  const TABLES_SHOWN = ['members', ...Object.keys(TABLE_COLUMNS)];
+  // The JPEGs, as base64 in the backup, as bytes in the database. Only base64 characters pass.
+  const photos = (backup.data.photo_data || []).filter(p => /^[A-Za-z0-9+/=\s]*$/.test(p.data || ''));
+  const photoInserts = !photos.length ? '-- photo_data: nothing in the backup' : [
+    'insert into public.photo_data (team_id, id, data) values',
+    photos.map(p => `  ((select id from restore_team), ${text(p.id)}, decode('${p.data.replace(/\s/g, '')}', 'base64'))`)
+      .join(',\n') + ';'
+  ].join('\n');
+
+  const countOf = t => (t === 'photo_data' ? photos : db[t] || []).length;
+  const TABLES_SHOWN = ['members', ...Object.keys(TABLE_COLUMNS), 'photo_data'];
   const contents = TABLES_SHOWN.map(t => `${countOf(t)} ${t}`).join(', ');
   const isEmptyCheck = PLANNING_TABLES
     .map(t => `exists (select 1 from public.${t} where team_id = (select id from restore_team))`).join('\n     or ');
@@ -167,6 +179,8 @@ function buildRestoreSql(backup, upgradeBackup, schemaVersion, typedTeamName, { 
     inserts('app_settings'),
     '',
     ...Object.keys(TABLE_COLUMNS).filter(t => t !== 'app_settings').flatMap(t => [inserts(t), '']),
+    photoInserts,
+    '',
     'commit;',
     '',
     '-- Check: these counts should match the contents listed at the top (people may be more, not fewer).',

@@ -98,7 +98,7 @@ const Goals = (() => {
   function taskRowHtml(k, g) {
     return html`<div class="gvt ${k.doneOn ? 'done' : ''}" style="${UI.goalStyle(g)}">
       <span class="gvtt">${esc(k.title)}</span>
-      <span class="who">${UI.whoHtml(k)}</span>
+      <span class="who">${Photos.mark(k)}${UI.whoHtml(k)}</span>
       <span class="gvts">${esc(statusText(k))}</span>
     </div>`;
   }

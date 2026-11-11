@@ -36,9 +36,9 @@ async function runDataLayerContract(layer, schemaVersion) {
   const save = ops => { track(ops); return layer.batch(ops); };
 
   async function cleanUp() {
-    const order = ['block_placements', 'period_placements', 'task_members', 'tasks', 'goals', 'clients', 'work_blocks',
+    const order = ['task_photos', 'block_placements', 'period_placements', 'task_members', 'tasks', 'goals', 'clients', 'work_blocks',
       'period_segments', 'app_settings'];
-    const rows = [...made].map(x => x.split('|'));
+    const rows = [...made].map(x => x.split('|')).filter(([table]) => table !== 'photo_data');   // goes with task_photos
     rows.sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
     for (const [table, id] of rows) await thrown(() => layer.batch([{ op: 'remove', table, id }]));
   }
@@ -123,6 +123,26 @@ async function runDataLayerContract(layer, schemaVersion) {
     check('goals keep their fields', fieldsSurvive(pick('goals', 'g1'), { clientId: P + 'a', hue: 8, achievedOn: null }), pick('goals', 'g1'));
     check('task_members keep their fields', fieldsSurvive(pick('task_members', 'who'), { taskId: P + 't1' }), pick('task_members', 'who'));
 
+    /* ---------- photos ---------- */
+
+    const JPEG = '/9j/4AECA//Z';   // a few bytes are enough: the layer stores what it gets
+    const photo = id => [
+      ins('task_photos', { id: P + id, taskId: P + 't1', width: 1200, height: 797 }),
+      ins('photo_data', { id: P + id, data: JPEG })
+    ];
+    const asBase64 = async blob => (blob ? btoa(String.fromCharCode(...new Uint8Array(await blob.arrayBuffer()))) : null);
+    out = await save(photo('ph'));
+    check('a photo is saved, and its answer holds no photo', out.length === 2 && !(out[1] && out[1].data), out[1]);
+    all = await layer.loadAll();
+    check('task_photos keep their fields, without the photo', fieldsSurvive(pick('task_photos', 'ph'),
+      { taskId: P + 't1', width: 1200, height: 797 }) && !('data' in pick('task_photos', 'ph')), pick('task_photos', 'ph'));
+    check('loadPhoto gives the same bytes back', await asBase64(await layer.loadPhoto(P + 'ph')) === JPEG);
+    const withPhoto = await layer.exportAll();
+    check('the backup has the photo as base64', (withPhoto.photo_data || []).some(p => p.id === P + 'ph' && p.data === JPEG));
+    await layer.batch([{ op: 'remove', table: 'task_photos', id: P + 'ph' }]);
+    check('removing task_photos removes the photo', await layer.loadPhoto(P + 'ph') === null);
+    await save(photo('ph2'));
+
     /* ---------- the Bin ---------- */
 
     check('loadAll has every table', TABLES.every(t => Array.isArray(all[t])), Object.keys(all));
@@ -130,7 +150,8 @@ async function runDataLayerContract(layer, schemaVersion) {
     await layer.batch([{ op: 'update', table: 'tasks', id: P + 't1', fields: { deletedAt: OLD, deleteGroup: P + 'grp' } }]);
     all = await layer.loadAll();
     check('a binned task isn\'t loaded', !has(all.tasks, 't1'));
-    check('nor the rows of a binned task', !has(all.task_members, 'who') && !has(all.block_placements, 'bp') && !has(all.period_placements, 'pp'));
+    check('nor the rows of a binned task', !has(all.task_members, 'who') && !has(all.block_placements, 'bp')
+      && !has(all.period_placements, 'pp') && !has(all.task_photos, 'ph2'));
     let bin = await layer.loadBin();
     check('the Bin has clients, goals and tasks', ['clients', 'goals', 'tasks'].every(t => Array.isArray(bin[t])), Object.keys(bin));
     check('the Bin shows the binned task', has(bin.tasks, 't1') && bin.tasks.find(k => k.id === P + 't1').deleteGroup === P + 'grp');
@@ -144,7 +165,8 @@ async function runDataLayerContract(layer, schemaVersion) {
     bin = await layer.loadBin();
     const backup2 = await layer.exportAll();
     check('emptying removes what is old enough', !has(backup2.tasks, 't1') && !has(backup2.goals, 'g2') && !has(bin.tasks, 't3'));
-    check('and what belongs to those tasks', !has(backup2.block_placements, 'bp') && !has(backup2.task_members, 'who'));
+    check('and what belongs to those tasks', !has(backup2.block_placements, 'bp') && !has(backup2.task_members, 'who')
+      && !has(backup2.task_photos, 'ph2') && !has(backup2.photo_data || [], 'ph2'));
     const orphan = all.tasks.find(k => k.id === P + 't2');
     check('a task alive under a deleted goal goes to the Inbox', !!orphan && orphan.stage === 'inbox' && orphan.goalId === null, orphan);
   } catch (e) {

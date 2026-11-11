@@ -39,7 +39,15 @@ const JAPT_CONFIG = (() => {
 
     // How long one request to the database may take (seconds). Saves wait their turn, so one that never
     // answers would hold up every click after it. Long enough for a slow phone connection.
-    requestSeconds: 15
+    requestSeconds: 15,
+
+    // Photos on a task are made smaller in the browser before they are stored: the long side at most this
+    // many pixels, as JPEG of this quality (0 to 1). 1200 keeps handwriting on a whiteboard and text on a
+    // screenshot readable on a tablet; 0.7 is where JPEG artefacts stay out of sight. Together about 120 kB
+    // a photo, so the free 500 MB database holds about three years at five photos a working day.
+    // docs/design.md, Photos.
+    photoMaxSide: 1200,
+    photoQuality: 0.7
   };
 
   // Change values here. Leave a key out to use the default.
@@ -55,7 +63,9 @@ const JAPT_CONFIG = (() => {
     dayEnd: int(1, 24),
     agendaMinutes: int(1, 1440),
     reloadSeconds: int(5, 3600),
-    requestSeconds: int(1, 300)
+    requestSeconds: int(1, 300),
+    photoMaxSide: int(320, 4000),
+    photoQuality: v => typeof v === 'number' && v >= 0.3 && v <= 1
   };
 
   const cfg = { ...DEFAULTS };

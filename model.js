@@ -372,7 +372,16 @@ function createModel(CFG) {
   const freshColour = members =>
     MEMBER_COLOURS.find(c => !members.some(u => u.color === c)) || MEMBER_COLOURS[members.length % MEMBER_COLOURS.length];
 
+  /* ---------- photos ---------- */
+
+  // The size a photo is stored at: the long side at most max, the same proportions, never made larger.
+  function fitWithin(width, height, max) {
+    const scale = Math.min(1, max / Math.max(width, height));
+    return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
+  }
+
   return {
+    fitWithin,
     parseD, toDs, addDays, addMonths, daysBetween, daysIn, weekday, today, setToday, localDs,
     setWeekStart, getWeekStart, weekFirst, weekDays, isWeekend, weekOrder,
     SNAP, MINLEN, snap, hhmm, hhmm2, parseHm,

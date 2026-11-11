@@ -224,12 +224,11 @@ const Tasks = (() => {
     const inInbox = !!k && k.stage === M.STAGE.INBOX;
     const title = esc(k ? k.title : ''), hint = t('task.ph');
     const titleInput = `<input type="text" name="title" autocomplete="off" placeholder="${hint}" value="${title}">`;
-    const noteArea = `<textarea name="note">${esc(k ? k.note || '' : '')}</textarea>`;
     const goals = GoalPicker.options(t(inInbox ? 'goal.not_yet' : 'goal.choose'), !inInbox, k ? k.goalId : null);
     return html`<form>
       <h3>${t(k ? 'task.edit_title' : 'task.new_title')}</h3>
       ${formField(t('form.task'), titleInput)}
-      ${formField(t('form.note'), noteArea)}
+      ${Photos.noteFieldHtml({ name: 'note', value: k ? k.note || '' : '' })}
       ${formField(t(inInbox ? 'form.goal_optional' : 'form.goal'), `<select name="goal">${goals}</select>`)}
       ${formField(t('form.deadline'), '<input type="date" name="deadline">')}
       <div data-rephint></div>
@@ -280,13 +279,17 @@ const Tasks = (() => {
       goalId: goalEl.value || null,
       who: state.who.slice(),
       deadline: deadlineEl.value || null,
-      repeat: deadlineEl.dataset.rep || null
+      repeat: deadlineEl.dataset.rep || null,
+      photos: state.photos.changes()
     };
   }
 
   async function saveForm(state, e) {
     e.preventDefault(); if (state.busy) return;
     const { id, task: k, q } = state;
+    state.busy = true;
+    await state.photos.ready();   // a photo still being made smaller goes along
+    state.busy = false;
     const fields = readFields(state);
     const stage = k ? k.stage : q('[name=list]').value;
     if (UI.showProblems(Store.taskProblems(fields, stage), { title: state.titleEl, goal: state.goalEl })) return;
@@ -299,6 +302,7 @@ const Tasks = (() => {
       if (k) state.seenAt = UI.afterFormConflict(state.seenAt, Store.task(id), 'form.gone_task');
       return;
     }
+    state.photos.saved();
     if (!k) View.fold[stage] = false;   // the list the new task goes into opens
     state.dlg.close();
   }
@@ -337,6 +341,7 @@ const Tasks = (() => {
       who: k ? Store.whoOf(id).slice() : [],
       delArmed: false, busy: false
     };
+    state.photos = Photos.editor(q('.notebox').parentElement, f, id);
 
     state.goalEl.value = k && k.goalId != null ? k.goalId : '';
     GoalPicker.build(state.goalEl);

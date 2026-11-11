@@ -172,9 +172,13 @@ const Inbox = (() => {
     };
     if (UI.showProblems(Store.taskProblems(fields, STAGE.INBOX), { title: inp })) return;
     adding = true;
+    await noteEditor.ready();   // a photo still being made smaller goes along
+    fields.photos = noteEditor.changes();
     const res = await UI.act(() => Store.addInboxTask(fields));
     adding = false;
     if (res) {
+      noteEditor.saved();
+      noteEditor.reset();
       recent.push(res.id);
       inp.value = '';
       $('ibDesc').value = '';
@@ -268,7 +272,10 @@ const Inbox = (() => {
     f.querySelector('.ibsubmit').classList.toggle('more', r.bottom > innerHeight - MORE_MARGIN);
   }
 
+  let noteEditor = null;   // the note with its photos (photos.js)
   function init() {
+    $('ibNote').outerHTML = Photos.noteFieldHtml({ id: 'ibDesc', rows: 2, cls: 'f full' });
+    noteEditor = Photos.editor($('ibDesc').closest('.f'), $('ibForm'), null);
     $('ibForm').onsubmit = e => { e.preventDefault(); add(); };
     $('ibWho').onclick = toggleWho;
     DeadlinePicker.wrap($('ibDeadline'));

@@ -117,4 +117,15 @@ test('an empty table doesn\'t make invalid SQL', () => {
   assert.ok(!s.includes('insert into public.calendars'));
 });
 
+test('photos come back as bytes, after their task_photos rows', () => {
+  const s = sql(backup({
+    task_photos: [{ id: 'f1', taskId: 't1', width: 1200, height: 797, ...who }],
+    photo_data: [{ id: 'f1', data: '/9j/4AECA//Z' }, { id: 'f2', data: "x'); drop table tasks; --" }]
+  }));
+  has(s, "decode('/9j/4AECA//Z', 'base64')");
+  assert.ok(s.indexOf('insert into public.task_photos') < s.indexOf('insert into public.photo_data'));
+  assert.ok(!s.includes('drop table'), 'only base64 may pass');
+  has(s, '1 photo_data');
+});
+
 console.log(`restore tests: ${ok} passed`);

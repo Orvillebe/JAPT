@@ -170,7 +170,7 @@ const App = (() => {
       }));
     }
     // On a phone the Inbox opens, and Taken shows the list; on a laptop the calendar stays (as the mockup).
-    if (UI.PHONE()) { View.page = 'inbox'; if (View.mode !== UI.MODE.DAY) View.mode = UI.MODE.LIST; }
+    if (UI.PHONE()) { View.page = 'inbox'; View.mode = UI.MODE.LIST; }
     if (location.hash === '#inbox') View.page = 'inbox';   // a bookmark for on the way
     show(View.page);
   }
@@ -212,10 +212,20 @@ const App = (() => {
     $('btnLogout').onclick = logout;
     $('accessLogout').onclick = logout;
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') reloadIfStale(false);
+      if (document.visibilityState === 'visible') reloadIfStale(false); else phoneBackToList();
     });
     if (await DataService.getSession()) await start();
     else showLogin();
+  }
+
+  // On a phone, leaving the app puts Taken back on the list, so coming back there starts from the list,
+  // as after opening the app. Not while a window is open, such as the task form you take a photo for:
+  // that is not leaving.
+  function phoneBackToList() {
+    if (!started || !UI.PHONE() || View.mode === UI.MODE.LIST || document.querySelector('dialog[open]')) return;
+    View.mode = UI.MODE.LIST;
+    View.save();
+    if (View.page === 'tasks') show('tasks');
   }
 
   const versions = () => ({ app: APP_VERSION, db: dbVersion });

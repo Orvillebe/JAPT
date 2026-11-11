@@ -31,7 +31,14 @@ JAPT is static files and a Supabase project. Someone else can run it on their ow
 
 **On an address that isn't in `deployment.js`, JAPT refuses to start**, so a forgotten address can't look as if it works while saving in one browser only.
 
-**Inviting someone:** Authentication > Users > Invite. They join your team by themselves but have no access yet: set `allowed` to true for them in Table Editor > `members`. Beheer then sets their name and colour.
+**Adding someone:**
+
+1. **Authentication > Users > Add user > Create new user:** their email and a password, with *Auto Confirm User* on.
+2. **Table Editor > `members`:** a row for them is already there (named after their email before the @), because a new login joins the team by itself. Set `allowed` to true. Without it they can log in but see that they have no access.
+3. **In JAPT, Beheer > Gebruikers:** their name and colour.
+4. Give them the address and the password, not both in the same mail.
+
+Not *Invite*: the invitation mail lets someone in once, but JAPT has no screen to choose a password yet, so they couldn't log in again. A password is changed in Supabase too, at the user. **Taking someone's access away:** `allowed` to false in `members`; their name stays on old tasks.
 
 **Another backend than Supabase:** write one file for it, name it in `data-service.js`, `index.html` and `deployment.js`. `model.js`, the Store and the screens stay as they are. [`docs/data-layer.md`](docs/data-layer.md) says exactly what it must do, and `tests/contract.html` checks it.
 
@@ -183,6 +190,7 @@ Not built, but prepared for. Each can be added without changing the data that ex
 - **Adding to the Inbox without a connection:** new Inbox tasks wait on the phone and are sent once there is a connection. The first version is already built for it (ids made in the app, one save per Inbox task that can safely be sent twice); what's left is the queue and a service worker, built together with the installable app.
 - **Sharing a photo to JAPT from an Android phone**, straight into a new Inbox task. Needs the installable app above and a small service worker. Not possible on iPhone.
 - **Live updates** when a colleague changes something. The first version loads their changes when the app opens, when you come back to the tab, and when you move to another day or week.
+- **Inviting someone from JAPT** instead of adding them in the database: an email address in Beheer > Gebruikers, the invitation mail, choosing a password in JAPT, and access switched on and off in Beheer.
 - **A second interface language.**
 - **More users: many small teams, not bigger teams.** The use case is an agency or a freelancer, and many of those, not the multinational. The database has a team on every row from the start, and teams are kept apart; signing up, creating teams from the app, inviting from the app and paying are not built.
 

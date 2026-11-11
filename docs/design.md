@@ -9,7 +9,7 @@ How JAPT works and why: users and hosting, the data model, the rules, and how th
 
 - **Meetings** are read, read-only, from the shared kSuite (Infomaniak) agenda through its shareable link. The link is a setting in Beheer, never in the code. One team agenda for now; the model leaves room for one agenda per person (see *Possible future*).
 - **Offline adding to the Inbox:** prepared now (see *Inbox*), built later (see *Possible future*).
-- **Users** are the same as JATL and JAFT: own Supabase project, invited users, access list. Beheer only sets name and colour.
+- **Users** are the same as JATL and JAFT: own Supabase project, users added by the owner, access list. Beheer only sets name and colour.
 - **Teams are in the database from the first migration** (decided 2026-11-09). JAPT starts with one team, Orville, and nothing changes in what you see. If it is opened up later, it grows in many small teams; the data is ready for that. See *Teams*.
 - **Deleting** goes to a Bin for 30 days, as in JAFT, instead of the mockup's "Definitief verwijderen".
 - **Look:** three themes as in JAFT (Orville licht default, Orville donker, Neutraal), chosen per device.
@@ -28,7 +28,7 @@ How JAPT works and why: users and hosting, the data model, the rules, and how th
 **Assumption:** as in JAFT.
 
 - **Users:** a small agency team. Everyone in a team sees and changes everything of that team. No roles.
-- **Database:** its own Supabase project, EU region, free plan. Row Level Security on every table, self-registration off, users are invited, and every rule checks "logged in and on the access list of the team this row belongs to" (`members.allowed`, see *Teams*).
+- **Database:** its own Supabase project, EU region, free plan. Row Level Security on every table, self-registration off, users are added by the owner, and every rule checks "logged in and on the access list of the team this row belongs to" (`members.allowed`, see *Teams*).
 - **Swappable data layer:** the app talks to one data layer (`data-service.js`). Local storage for testing, Supabase in production. Which one follows from the address: the addresses in `deployment.js` use the real database, your own computer or network uses local data unless the address ends in `?db=live`, and any other address refuses to start, so a forgotten address can't look as if it works while saving in one browser only. Everything that differs per installation is in `deployment.js`, so someone can run the same code on their own database, or on another backend by writing one data layer. What that layer must do is in `docs/data-layer.md`, and `tests/contract.js` checks it.
 - **Hosting:** static files, no build step, GitHub Pages. Branch `dev` for work, `main` is live.
 - **Personal view settings stay on the device:** current view (Taken, Doelen, Inbox), calendar mode, grouping, filters, folded lists, hidden sidebar. They are not shared and not in the database.
@@ -252,7 +252,7 @@ The options that were considered:
 ### Users
 
 - Deleting a user takes them off every task, after a confirmation with the count.
-  With logins, adding a user happens in Supabase (invite); Beheer sets name and colour. Removing a user is taking them off the access list, done by the owner in the database. **Assumption:** their name stays on old tasks; *Verwijder* in Beheer only takes them off open tasks.
+  With logins, adding a user happens in Supabase: a login with a password (*Create new user*), and `allowed` on in `members`; Beheer sets name and colour (README, Adding someone). Not the invitation mail: it lets someone in once, and JAPT has no screen yet to choose a password, so they couldn't log in again. Removing a user is taking them off the access list, done by the owner in the database. Inviting from JAPT itself is *Possible future*. **Assumption:** their name stays on old tasks; *Verwijder* in Beheer only takes them off open tasks.
 
 ### Teams
 
@@ -340,6 +340,10 @@ Not built, but prepared for. Each can be added without changing the data that ex
   - *Only adding.* Editing or planning offline would need rules for conflicts with colleagues first, a much bigger step.
 - **Sharing a photo to JAPT** (Android): JAPT in the phone's share menu, opening *Toevoegen* with the photo ready. It needs the app installed (*App installeren* in Chrome) and a small service worker that only catches the shared photo, because GitHub Pages can't receive it; keeping no files of the app, it can't leave an old version behind. iPhone doesn't let a web app into the share menu.
 - **Live updates** (Supabase Realtime): changes of colleagues within a second instead of at the next move. What it takes is described under *Working at the same time*; the position numbers and the `changed_at` check are already in place.
+- **Inviting someone from JAPT** instead of adding them in the database. Three parts, each useful on its own:
+  - *A password in JAPT:* a screen *Kies je wachtwoord* that takes the link from an invitation mail, and *wachtwoord vergeten* and *wachtwoord wijzigen*. Only the app changes (Supabase Auth does the rest); from then on the invitation mail in Supabase works.
+  - *Access in Beheer > Gebruikers:* switching `allowed` on and off there instead of in the table. A migration lets a member change the access of others in the same team, never leaving a team without anyone who has access.
+  - *Inviting from Beheer:* typing an email address in JAPT. Sending an invitation needs Supabase's secret key, which can never be in the app, so it takes a small function on Supabase (an Edge Function) that sends it, only for someone with access to that team. The first piece of JAPT that doesn't run in the browser.
 - **A second interface language:** all text is already in `i18n/nl.js` by key; it takes a second file and a choice in Beheer.
 - **More users: many small teams, not bigger teams.** If JAPT is ever opened up, it grows in the number of teams, each with one or a few people: an agency or a freelancer, and many of those. The use case is not the multinational, so no departments, no levels of organisation and no thousands of people in one planning. A freelancer is a team of one, not a special case.
   The data is prepared for it (see *Teams*): every row has a team, and teams are kept apart. What it still takes: signing up and creating a team, inviting from the app, choosing between teams for someone in two, paying, a paid database plan, loading only recent data instead of everything, the Bin emptied by the database instead of by each browser, migrations that keep working while old tabs are open, and hosting other than GitHub Pages, which isn't meant for running a business.

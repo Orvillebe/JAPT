@@ -3,7 +3,7 @@
  *
  * Responsibilities:
  *   - The lists under each other, as in the task list: Ingepland, Nog niet ingepland, Backlog, Gedaan.
- *     A task still in the Inbox waits under Backlog (Store.goalListOf). Gedaan starts closed
+ *     Gedaan starts closed. A task still in the Inbox is not shown: it isn't counted for a goal yet
  *   - A task on one line: check box, title, its note on at most two lines, who, and when: the days it
  *     is planned, else its deadline. A click opens it into the full card, as in the task list; another
  *     click closes it
@@ -33,17 +33,14 @@ const GoalTasks = (() => {
   };
   // The tasks of a goal in one list, in the order of that list.
   function tasksIn(id, list) {
-    const mine = Store.tasksOfGoal(id).filter(k => Store.goalListOf(k) === list);
+    const mine = Store.tasksOfGoal(id).filter(k => Store.shownList(k) === list);
     if (list === L.PLANNED) return mine.sort((a, b) => firstDay(a).localeCompare(firstDay(b)));
     if (list === L.DONE) return mine.sort((a, b) => b.doneOn.localeCompare(a.doneOn));
-    const order = Store.itemsOf(list, k => k.goalId === id).map(k => k.id);
-    const at = k => (order.includes(k.id) ? order.indexOf(k.id) : order.length);   // the Inbox last
-    return mine.sort((a, b) => at(a) - at(b));
+    return Store.itemsOf(list, k => k.goalId === id);
   }
 
-  // When, on the right of a line: the days it is planned, else its deadline; a task in the Inbox says so.
+  // When, on the right of a line: the days it is planned, else its deadline.
   function whenText(k) {
-    if (k.stage === M.STAGE.INBOX) return t('list.inbox');
     if (k.doneOn) return UI.fmtDay(k.doneOn);
     const p = Store.idx().of(k.id);
     if (p.blocks.length || p.periods.length) {
@@ -52,11 +49,11 @@ const GoalTasks = (() => {
     return k.deadline ? t('goal.row_deadline', { d: UI.fmtDay(k.deadline) }) : '';
   }
 
-  // Can be dragged: in a list with your own order, and not in the Inbox (it has no place in a list yet).
-  const sortable = (k, list) => SORTABLE.includes(list) && k.stage !== M.STAGE.INBOX;
+  // Can be dragged: in a list with your own order.
+  const sortable = list => SORTABLE.includes(list);
 
   function lineHtml(k, list, g) {
-    const drag = sortable(k, list) ? `draggable="true" data-task="${k.id}" data-gvsort` : '';
+    const drag = sortable(list) ? `draggable="true" data-task="${k.id}" data-gvsort` : '';
     const note = k.note ? `<span class="gvtn">${esc(k.note)}</span>` : '';
     return html`<div class="gvt ${k.doneOn ? 'done' : ''}" data-gvt="${k.id}" ${drag} style="${UI.goalStyle(g)}">
       ${UI.chk(k)}
@@ -67,7 +64,7 @@ const GoalTasks = (() => {
   }
   // Opened: the card of the task list, with everything on it.
   const openedHtml = (k, list) =>
-    `<div class="gvopen" data-gvt="${k.id}" ${sortable(k, list) ? 'data-gvsort' : ''}>${UI.taskCard(k)}</div>`;
+    `<div class="gvopen" data-gvt="${k.id}" ${sortable(list) ? 'data-gvsort' : ''}>${UI.taskCard(k)}</div>`;
 
   function sectionHtml(g, list) {
     const items = tasksIn(g.id, list), canAdd = !g.achievedOn && SORTABLE.includes(list);
@@ -125,7 +122,7 @@ const GoalTasks = (() => {
     find: el => el.closest(SORTABLE.map(l => `dialog.gvw .sec[data-gvlist="${l}"]`).join(',')),
     accepts(d) {
       const k = Store.task(d.task);
-      return !!k && k.goalId === goalId && sortable(k, Store.goalListOf(k));
+      return !!k && k.goalId === goalId && k.stage !== M.STAGE.INBOX && sortable(Store.shownList(k));   // the Inbox has no list yet
     },
     over: (e, sec, d) => (isFolded(sec.dataset.gvlist) ? null : spotIn(e, sec, d)),
     async drop(sec, d, spot) {

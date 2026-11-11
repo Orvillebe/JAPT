@@ -758,10 +758,9 @@ test('goal figures count done, open and planned, and the tasks per list', async 
   const { S } = await app({ tasks: [task('a'), task('b', { doneOn: YESTERDAY }), task('c'), task('d', { stage: 'backlog' }),
     task('e', { stage: 'inbox' }), task('f', { stage: 'backlog', deadline: TOMORROW })],
     block_placements: [inBlock('p1', 'c', NEXT_MONDAY, 'ma')] });
-  eq(S.goalStats(S.goal('g1')), { total: 6, done: 1, open: 5, planned: 1,
-    lists: { planned: 1, open: 2, backlog: 2, done: 1 } });
-  eq(S.goalListOf(S.task('e')), 'backlog', 'a task in the Inbox waits under Backlog in its goal');
-  eq(S.goalListOf(S.task('f')), 'open', 'a due-soon backlog task as in the task list');
+  eq(S.goalStats(S.goal('g1')), { total: 5, done: 1, open: 4, planned: 1,
+    lists: { planned: 1, open: 2, backlog: 1, done: 1 } }, 'a due-soon backlog task counts as the task list shows it');
+  eq(S.tasksOfGoal('g1').map(k => k.id).includes('e'), false, 'a task still in the Inbox is not counted yet');
 });
 
 /* ---------- reloading only what changed ---------- */

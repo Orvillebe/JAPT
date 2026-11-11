@@ -33,7 +33,8 @@ function createLocalData() {
     3: () => {},   // migration 003 adds an optional field
     4: () => {},   // migration 004 only hardens the real database
     5: () => {},   // migration 005 only notes removals in the real database
-    6: db => { db.task_photos = db.task_photos || []; }
+    6: db => { db.task_photos = db.task_photos || []; },
+    7: () => {}    // migration 007 only adds how the real database answers with a photo
   };
 
   function upgrade(db) {

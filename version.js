@@ -13,6 +13,6 @@
  */
 
 const APP_VERSION = '0.6.0';
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 if (typeof module !== 'undefined') module.exports = { APP_VERSION, SCHEMA_VERSION };

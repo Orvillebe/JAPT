@@ -20,16 +20,11 @@
 <ul id="fails"></ul>
 <div id="loading" hidden></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
-<script src="../version.js"></script>
-<script src="../deployment.js"></script>
-<script src="../config.js"></script>
-<script src="../i18n/nl.js"></script>
-<script src="../i18n/i18n.js"></script>
-<script src="../tables.js"></script>
-<script src="../data-local.js"></script>
-<script src="../data-supabase.js"></script>
-<script src="../data-service.js"></script>
-<script src="contract.js"></script>
+<!-- The app's own files, always fresh: a browser that kept an older copy would test the old code. -->
+<script>
+  ['../version.js', '../deployment.js', '../config.js', '../i18n/nl.js', '../i18n/i18n.js', '../tables.js', '../data-local.js', '../data-supabase.js', '../data-service.js', 'contract.js']
+    .forEach(f => document.write(`<script src="${f}?t=${Date.now()}"><\/script>`));
+</script>
 <script>
   const $ = id => document.getElementById(id);
   $('which').textContent = 'Datalaag: ' + JAPT_CONFIG.backend;

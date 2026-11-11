@@ -3,7 +3,7 @@
 -- everything else; photo_data holds the JPEG itself and is only read when a task is opened, one photo at a
 -- time (docs/design.md, Photos). The JPEG is stored as bytes. On the way in it travels as base64 inside the
 -- same save as the task, so a task and its photos are saved together or not at all; on the way out it is
--- read as bytes (Accept: application/octet-stream).
+-- read as bytes (migration 007 adds how).
 -- Run once in the SQL Editor, after 005.
 
 begin;

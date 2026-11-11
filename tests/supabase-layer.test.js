@@ -130,15 +130,15 @@ const TESTS = {
     assert.strictEqual(blob.type, 'image/jpeg');
     assert.strictEqual(blob.size, 4);
     const { url, init } = asked[0];
-    assert.ok(url.startsWith('https://x.test/rest/v1/photo_data?select=data') && url.includes('&id=eq.f1'), url);
-    assert.strictEqual(init.headers.Accept, 'application/octet-stream', 'bytes, not text');
+    assert.ok(url.startsWith('https://x.test/rest/v1/rpc/task_photo?p_team=') && url.endsWith('&p_id=f1'), url);
+    assert.strictEqual(init.headers.Accept, 'image/jpeg', 'bytes, not text');
     assert.strictEqual(init.headers.Authorization, 'Bearer login-token', 'as the person logged in');
     assert.ok(init.signal, 'carries the time limit');
   },
   'an id goes into the address as text, not as more of the address': async () => {
     const { layer, asked } = photoAnswer([1]);
-    await layer.loadPhoto('f1&team_id=eq.other');
-    assert.ok(asked[0].url.endsWith('&id=eq.f1%26team_id%3Deq.other'), asked[0].url);
+    await layer.loadPhoto('f1&p_team=other');
+    assert.ok(asked[0].url.endsWith('&p_id=f1%26p_team%3Dother'), asked[0].url);
   },
   'a photo that is gone is null': async () => {
     assert.strictEqual(await photoAnswer([]).layer.loadPhoto('f1'), null);

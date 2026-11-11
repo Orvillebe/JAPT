@@ -179,11 +179,11 @@ async function attack(a, b) {
   r = await rpc(null, 'changes_since', { p_team: TEAM_B, p_since: null });
   check('What changed needs a login', refused(r), r);
 
-  // The photos themselves (migrations/006): read as bytes, never by another team.
-  const photoB = `/rest/v1/photo_data?select=data&team_id=eq.${TEAM_B}&id=eq.${TEAM_B}-photo`;
-  r = await call(b, 'GET', photoB, undefined, { Accept: 'application/octet-stream' });
+  // The photos themselves (migrations/006, 007): read as bytes, never by another team.
+  const photoB = `/rest/v1/rpc/task_photo?p_team=${TEAM_B}&p_id=${TEAM_B}-photo`;
+  r = await call(b, 'GET', photoB, undefined, { Accept: 'image/jpeg' });
   check("B reads its own photo as bytes", r.ok && typeof r.data === 'string' && r.data.length > 0, r);
-  r = await call(a, 'GET', photoB, undefined, { Accept: 'application/octet-stream' });
+  r = await call(a, 'GET', photoB, undefined, { Accept: 'image/jpeg' });
   check("A can't read B's photo", !r.ok || !r.data, r);
   r = await call(a, 'GET', `/rest/v1/photo_data?team_id=eq.${TEAM_B}`);
   check("A can't read B's photos as rows", empty(r), r.data);

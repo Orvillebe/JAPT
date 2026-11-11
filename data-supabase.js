@@ -8,7 +8,7 @@
  *   - Translating between database columns and app fields
  *   - Hiding binned rows in one place: loadAll never returns them
  *   - Reloading only what changed since the previous load (changes_since in migrations/005)
- *   - Photos: sent as base64 inside the save of their task, read back one at a time as bytes (migrations/006)
+ *   - Photos: sent as base64 inside the save of their task, read back one at a time as bytes (migrations/006, 007)
  *
  * Everything that knows about Supabase is in this file and in migrations/. What you may reach is decided
  * in the database (Row Level Security), not here.
@@ -172,18 +172,18 @@ function createSupabaseData() {
       check(error);
     },
 
-    // One photo as a JPEG, or null when it is gone. Asked as bytes (Accept: application/octet-stream), not
+    // One photo as a JPEG, or null when it is gone. Asked as bytes through task_photo (migrations/007), not
     // through the library: as JSON a photo would come as text, a third or twice as large.
     async loadPhoto(id) {
       const { data: { session } } = await sb.auth.getSession();
-      const url = `${JAPT_DEPLOYMENT.supabaseUrl}/rest/v1/photo_data?select=data`
-        + `&team_id=eq.${encodeURIComponent(teamId)}&id=eq.${encodeURIComponent(id)}`;
+      const url = `${JAPT_DEPLOYMENT.supabaseUrl}/rest/v1/rpc/task_photo`
+        + `?p_team=${encodeURIComponent(teamId)}&p_id=${encodeURIComponent(id)}`;
       let answer;
       try {
         answer = await fetchWithLimit(url, { headers: {
           apikey: JAPT_DEPLOYMENT.supabaseKey,
           Authorization: `Bearer ${session ? session.access_token : JAPT_DEPLOYMENT.supabaseKey}`,
-          Accept: 'application/octet-stream'
+          Accept: 'image/jpeg'
         } });
       } catch (e) {
         throw Object.assign(new Error(e.message), { code: 'no-answer' });

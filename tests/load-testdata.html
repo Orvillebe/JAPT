@@ -18,13 +18,11 @@
 <p><label>Back-upbestand laden: <input type="file" id="file" accept=".json,application/json"></label></p>
 <p id="msg"></p>
 <p><a href="../index.html">Naar JAPT</a></p>
-<script src="../version.js"></script>
-<script src="../config.js"></script>
-<script src="../model.js"></script>
-<script src="../id.js"></script>
-<script src="../tables.js"></script>
-<script src="../data-local.js"></script>
-<script src="testdata.js"></script>
+<!-- The app's own files, always fresh: a browser that kept an older copy would test the old code. -->
+<script>
+  ['../version.js', '../config.js', '../model.js', '../id.js', '../tables.js', '../data-local.js', 'testdata.js']
+    .forEach(f => document.write(`<script src="${f}?t=${Date.now()}"><\/script>`));
+</script>
 <script>
   const local = createLocalData(), msg = document.getElementById('msg');
   const say = (t, ok = true) => { msg.textContent = t; msg.className = ok ? 'ok' : 'err'; };

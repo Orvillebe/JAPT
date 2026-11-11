@@ -41,13 +41,11 @@
 <div id="out"></div>
 <iframe id="app" width="1280" height="800" title="JAPT"></iframe>
 
-<script src="../version.js"></script>
-<script src="../config.js"></script>
-<script src="../model.js"></script>
-<script src="../id.js"></script>
-<script src="../tables.js"></script>
-<script src="../data-local.js"></script>
-<script src="testdata.js"></script>
+<!-- The app's own files, always fresh: a browser that kept an older copy would test the old code. -->
+<script>
+  ['../version.js', '../config.js', '../model.js', '../id.js', '../tables.js', '../data-local.js', 'testdata.js']
+    .forEach(f => document.write(`<script src="${f}?t=${Date.now()}"><\/script>`));
+</script>
 <script>
   const POISON = `"'><i data-xss>x</i>`;
   const SHOWN = '<i data-xss>';            // what you read on screen when it is escaped correctly

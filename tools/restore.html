@@ -32,10 +32,11 @@
 <textarea id="sql" readonly placeholder="Het SQL-script verschijnt hier."></textarea>
 <p><button id="copy" disabled>Script kopiëren</button><button id="save" disabled>Bewaren als .sql</button></p>
 <p>Daarna: Supabase › SQL Editor › New query › plakken › Run. De telling onderaan moet overeenkomen met de eerste regels van het script.</p>
-<script src="../version.js"></script>
-<script src="../tables.js"></script>
-<script src="../id.js"></script>
-<script src="../data-local.js"></script>
+<!-- The app's own files, always fresh: a browser that kept an older copy would test the old code. -->
+<script>
+  ['../version.js', '../tables.js', '../id.js', '../data-local.js']
+    .forEach(f => document.write(`<script src="${f}?t=${Date.now()}"><\/script>`));
+</script>
 <script src="restore.js"></script>
 <script>
   const $ = id => document.getElementById(id);

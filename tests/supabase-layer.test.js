@@ -1,6 +1,6 @@
 /**
- * Tests for the parts of data-supabase.js that decide what a failed request means, and how an answer of
- * changes_since (migrations/005) becomes what the Store takes in. The Supabase library is
+ * Tests for the parts of data-supabase.js that decide what a failed request means, how an answer of
+ * changes_since (migrations/005) becomes what the Store takes in, and how a photo is asked for (migrations/006). The Supabase library is
  * replaced by a stand-in: what the database itself does is proven by tests/contract.html?db=live and
  * tests/teams.test.js.
  * Run: node tests/supabase-layer.test.js (no dependencies).
@@ -22,10 +22,13 @@ function layerAnswering(error, fetchStub, rpcStub) {
   let limitedFetch = null;
   const window = { supabase: { createClient(url, key, options) {
     limitedFetch = options.global.fetch;
-    return { rpc: rpcStub || (async () => ({ data: error ? null : [], error })) };
+    return {
+      rpc: rpcStub || (async () => ({ data: error ? null : [], error })),
+      auth: { getSession: async () => ({ data: { session: { access_token: 'login-token' } } }) }
+    };
   } } };
   const context = {
-    window, setTimeout, AbortController, fetch: fetchStub,
+    window, setTimeout, AbortController, Blob, fetch: fetchStub,
     JAPT_DEPLOYMENT: { supabaseUrl: 'https://x.test', supabaseKey: 'k' },
     JAPT_CONFIG: { requestSeconds: REQUEST_SECONDS }, TABLES, BINNED_TABLES, TASK_TABLES
   };
@@ -51,6 +54,19 @@ function changesDatabase(answers) {
 const T1 = '2026-11-10T09:00:00+00:00', T2 = '2026-11-10T09:01:00+00:00';
 const plain = v => JSON.parse(JSON.stringify(v));   // the layer's objects come from its own world
 const dbRow = fields => ({ team_id: 'team', changed_at: T1, ...fields });
+
+// A photo request answered with these bytes (an empty list: the photo is gone) or this status.
+function photoAnswer(bytes, status = 200) {
+  const asked = [];
+  const fetchStub = async (url, init) => {
+    asked.push({ url, init });
+    return { ok: status < 400, status, blob: async () => new Blob([Uint8Array.from(bytes)]) };
+  };
+  return { layer: layerAnswering(null, fetchStub).data, asked };
+}
+const photoError = async (layer, id) => {
+  try { await layer.loadPhoto(id); return null; } catch (e) { return e; }
+};
 
 const TESTS = {
   'the first load is everything, without binned rows or the rows of a binned task': async () => {
@@ -106,6 +122,33 @@ const TESTS = {
   'a request that hangs is stopped after the time limit': async () => {
     const started = Date.now();
     await assert.rejects(layerAnswering(null, hanging).limitedFetch()('https://x.test', {}), /stopped/);
+    assert.ok(Date.now() - started < 2000, 'stopped in time');
+  },
+  'a photo is asked as bytes, with the login, and comes back as a JPEG': async () => {
+    const { layer, asked } = photoAnswer([0xff, 0xd8, 0xff, 0xd9]);
+    const blob = await layer.loadPhoto('f1');
+    assert.strictEqual(blob.type, 'image/jpeg');
+    assert.strictEqual(blob.size, 4);
+    const { url, init } = asked[0];
+    assert.ok(url.startsWith('https://x.test/rest/v1/photo_data?select=data') && url.includes('&id=eq.f1'), url);
+    assert.strictEqual(init.headers.Accept, 'application/octet-stream', 'bytes, not text');
+    assert.strictEqual(init.headers.Authorization, 'Bearer login-token', 'as the person logged in');
+    assert.ok(init.signal, 'carries the time limit');
+  },
+  'an id goes into the address as text, not as more of the address': async () => {
+    const { layer, asked } = photoAnswer([1]);
+    await layer.loadPhoto('f1&team_id=eq.other');
+    assert.ok(asked[0].url.endsWith('&id=eq.f1%26team_id%3Deq.other'), asked[0].url);
+  },
+  'a photo that is gone is null': async () => {
+    assert.strictEqual(await photoAnswer([]).layer.loadPhoto('f1'), null);
+  },
+  'a photo refused by the database keeps its status': async () => {
+    assert.strictEqual((await photoError(photoAnswer([], 401).layer, 'f1')).code, '401');
+  },
+  'a photo request that hangs is "no answer", in time': async () => {
+    const started = Date.now();
+    assert.strictEqual((await photoError(layerAnswering(null, hanging).data, 'f1')).code, 'no-answer');
     assert.ok(Date.now() - started < 2000, 'stopped in time');
   },
   'what the library passes along reaches the real request': async () => {

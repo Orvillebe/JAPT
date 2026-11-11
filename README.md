@@ -167,6 +167,7 @@ One file per task; each file starts with what it is responsible for.
 | `manage-blocks.js`, `manage-period.js`, `manage-other.js` | The tabs Werkblokken and Werkperiode; the seven small tabs |
 | `agenda.js`, `export.js` | Meetings from the agenda link; backup and analysis export |
 | `app.js` | Starting, login, version check, pages, loading changes at natural moments and every 20 s in view |
+| `icon.svg` | The icon: a month page with one day circled by hand, as in the Orville logo. `icon-192.png`, `icon-512.png` (Android) and `apple-touch-icon.png` (iPhone, square: iOS rounds it) are made from it with Chrome: `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --window-size=512,512 --default-background-color=00000000 --screenshot=icon-512.png icon.svg` |
 | `migrations/` | The database, one numbered file per change |
 | `tools/` | `first-team.sql` for a new installation, `restore.html` to put a backup back, `teams-test-setup.sql` and `teams-test-remove.sql` for the teams test |
 

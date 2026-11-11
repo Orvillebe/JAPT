@@ -2,7 +2,7 @@
 
 How JAPT works and why: users and hosting, the data model, the rules, and how the app can change while the database keeps its data. It is read from the interaction mockup (`docs/JAPT_userinteraction_mockup.html`). The mockup shows what the user sees and does; this file says what the real software stores and decides.
 
-**Status: built and running against its own database; not live yet.** Items marked **Assumption** follow JAFT or the mockup unless you say otherwise.
+**Status: live and in use.** Items marked **Assumption** follow JAFT or the mockup unless you say otherwise.
 
 ## 0. Decisions so far
 
@@ -21,7 +21,7 @@ How JAPT works and why: users and hosting, the data model, the rules, and how th
 - **No planning history:** a task taken out of a past block is simply gone from that day.
 - **Photos on a task** (decided 2026-11-11): part of the note, taken or pasted without leaving JAPT, stored small in the database itself (see *Photos*).
 
-- **Colleagues' changes** are loaded when the app opens, when the tab comes back into view, and when you move to another day, week or period (see *Working at the same time*). Live updates are *Possible future*.
+- **Colleagues' changes** are loaded when the app opens, when the tab comes back into view, when you move to another day, week or period, and every 20 seconds while the app is in view (see *Working at the same time*).
 
 ## 1. Users, accounts and hosting
 
@@ -216,16 +216,6 @@ JAPT is more likely than JAFT to be used by two people at once (planning togethe
 
 The 20 seconds is `reloadSeconds` in `config.js`: how late a colleague's change shows up at most. It is a choice, not a measurement; 10 or 30 work as well. One number for both the moments and the clock, because a second number for "actively planning" would save little and need a rule for when you are active. On your own machine (the local data layer) nobody else changes anything, so nothing is loaded by the clock. A removed row leaves nothing to see, so the database notes every removal for 30 days; an app that hasn't asked for that long loads everything. The database looks 2 minutes further back than asked, so a save that was still busy at the previous load isn't missed. A redraw never happens in the middle of a drag or with a task card open; what arrives then waits until they are done. While a form or window is open the page behind it can reload, but the form itself is left alone, and it remembers the version it opened: saving compares with that version, so a reload can't make older values count as up to date. When someone else changed it, the form says so, keeps what you typed, and a second save is a conscious choice for your own version. Undo expects the row as your save left it, so it never overwrites what someone changed since. What it misses: two people looking at the same week see each other's changes up to 20 seconds late; the `changed_at` check stops a save on something that changed meanwhile.
 
-The options that were considered:
-
-- **On reload only (as JAFT):** when the app opens. Too stale for planning together.
-- **Live (Supabase Realtime)**, now *Possible future*: within a second.
-  - *Database:* the followed tables are added to Supabase's change feed (one migration line each). Row Level Security also applies to the change messages, so the access list holds. Far within the free plan (200 connections at once, 2 million messages a month).
-  - *Data layer:* a new `onChange(callback)` in the data-layer contract. The local version needs it too (tabs tell each other through `BroadcastChannel`), to test without Supabase. A later replacement of Supabase must offer it as well.
-  - *Own changes come back* as messages; merging must give the same result when a change arrives twice.
-  - *Missed messages are not resent* (a phone asleep, a dropped connection). On reconnect and when the tab comes back into view, the app loads the changes anyway, so *live* comes on top of *middle*, it doesn't replace it.
-  - *Interface:* a redraw must wait while you drag (it would remove the card under the mouse), must not overwrite an open task or goal form, and the form must say so when its task was deleted meanwhile. The open task card, the Inbox undo and the confirmation panels each need that check.
-
 ### Meetings
 
 - **Read-only.** JAPT never writes to the agenda. Meetings are shown, not planned on: they are not tasks and cannot be dragged.
@@ -339,7 +329,6 @@ Not built, but prepared for. Each can be added without changing the data that ex
   - *A service worker* that keeps the app's own files (never the data) on the phone, so JAPT opens without a connection. Without it, offline adding only works when JAPT was already open in a tab, and phones often reload a tab in the background. It is the same piece as the installable app above, so both are built together. Every release then also updates the service worker's file list; the version check catches a phone that keeps an old copy.
   - *Only adding.* Editing or planning offline would need rules for conflicts with colleagues first, a much bigger step.
 - **Sharing a photo to JAPT** (Android): JAPT in the phone's share menu, opening *Toevoegen* with the photo ready. It needs the app installed (*App installeren* in Chrome) and a small service worker that only catches the shared photo, because GitHub Pages can't receive it; keeping no files of the app, it can't leave an old version behind. iPhone doesn't let a web app into the share menu.
-- **Live updates** (Supabase Realtime): changes of colleagues within a second instead of at the next move. What it takes is described under *Working at the same time*; the position numbers and the `changed_at` check are already in place.
 - **Inviting someone from JAPT** instead of adding them in the database. Three parts, each useful on its own:
   - *A password in JAPT:* a screen *Kies je wachtwoord* that takes the link from an invitation mail, and *wachtwoord vergeten* and *wachtwoord wijzigen*. Only the app changes (Supabase Auth does the rest); from then on the invitation mail in Supabase works.
   - *Access in Beheer > Gebruikers:* switching `allowed` on and off there instead of in the table. A migration lets a member change the access of others in the same team, never leaving a team without anyone who has access.

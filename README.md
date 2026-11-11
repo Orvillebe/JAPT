@@ -2,7 +2,7 @@
 
 Weekly planning for a small agency team. Tasks hang under goals, goals under clients (or *Intern*). You collect tasks in the Inbox (with photos in the note if you like), give them a goal, and drag them into the team's standard work blocks or into a longer work period. Meetings from the team's kSuite agenda (its link is a setting in Beheer) show between the blocks. Static site, no build step.
 
-**Status: works against its own Supabase database, not live yet.** Everything in the mockup works, plus the Bin, the three looks, the agenda link, backup and analysis export, logins and teams. A test of the whole thing with a real mouse and phone is still to come.
+**Status: in use, live at [orvillebe.github.io/JAPT](https://orvillebe.github.io/JAPT/).** Everything in the mockup works, plus the Bin, the three looks, the agenda link, photos on tasks, backup and analysis export, logins and teams. Restoring a backup has been tried on a real database.
 
 What the user sees and does is in the interaction mockup [`docs/JAPT_userinteraction_mockup.html`](docs/JAPT_userinteraction_mockup.html). What the software stores and decides is in [`docs/design.md`](docs/design.md).
 
@@ -90,6 +90,7 @@ The app compares its database version with the database when it starts (`SCHEMA_
 | You are logged in but have no access | Set `allowed` to true in Table Editor > `members` |
 | Nothing changes after an update | Reload without the cache: Cmd+Shift+R |
 | The project doesn't answer | The free plan pauses a project after about a week without use; resume it in Supabase |
+| Someone forgot their password | JAPT can't reset it yet: change it in Authentication > Users, at that user, and give them the new one |
 
 ## Tests
 

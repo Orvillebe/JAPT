@@ -294,8 +294,11 @@ dialog.gvw.editing{overflow:visible}
 .gcard input.gn{flex:1;min-width:0;font:inherit;font-weight:600;font-size:15px;color:var(--text);background:transparent;
   border:1px solid transparent;border-radius:5px;padding:2px 4px}
 .gcard input.gn:hover,.gcard input.gn:focus{border-color:var(--line);background:var(--panel)}
-.bar{height:6px;border-radius:4px;background:rgba(0,0,0,.09);overflow:hidden}
-.bar i{display:block;height:100%;background:var(--tb)}
+/* doelbalk: een stuk per lijst. Vaste kleuren, los van de doelkleur, zodat een lijst op elk doel dezelfde kleur heeft */
+.bar{display:flex;gap:2px;height:6px;border-radius:4px;background:rgba(0,0,0,.09);overflow:hidden}
+.bar i{display:block;height:100%}
+.bar .b-done{background:#3f8f3a}.bar .b-planned{background:#3d74c9}.bar .b-open{background:#f5dc1f}
+.bar .b-backlog,.bar .b-inbox{background:#8a8780}
 .gstat{font-size:12.5px;color:var(--text-2)}
 .gstat-under{margin-top:6px}
 .gconf{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:6px;background:var(--veil)}

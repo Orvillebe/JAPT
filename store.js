@@ -274,10 +274,12 @@ const Store = (() => {
     if (list === LIST.OPEN) r.sort((a, b) => (+dueSoon(b)) - (+dueSoon(a)) || soonestFirst(a, b));
     return r;
   }
+  // A goal's tasks counted: in all, done, not done (open), planned, and per list (lists, keyed by LIST).
   const goalStats = g => {
     const ts = tasks().filter(k => k.goalId === g.id), open = ts.filter(k => !k.doneOn);
-    const planned = open.filter(k => listOf(k) === LIST.PLANNED).length;
-    return { total: ts.length, done: ts.length - open.length, open: open.length, planned };
+    const lists = Object.fromEntries(Object.values(LIST).map(l => [l, 0]));
+    ts.forEach(k => { lists[listOf(k)]++; });
+    return { total: ts.length, done: ts.length - open.length, open: open.length, planned: lists[LIST.PLANNED], lists };
   };
 
   /* ---------- what may be saved ---------- */

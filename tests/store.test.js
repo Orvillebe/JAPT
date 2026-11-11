@@ -754,9 +754,11 @@ test('a due-soon backlog task is shown in Nog niet ingepland without changing it
   eq(S.itemsOf('open').map(k => k.id), ['a']);
   eq(S.task('a').stage, 'backlog');
 });
-test('goal figures count done, open and planned', async () => {
-  const { S } = await app({ tasks: [task('a'), task('b', { doneOn: YESTERDAY }), task('c')], block_placements: [inBlock('p1', 'c', NEXT_MONDAY, 'ma')] });
-  eq(S.goalStats(S.goal('g1')), { total: 3, done: 1, open: 2, planned: 1 });
+test('goal figures count done, open and planned, and the tasks per list', async () => {
+  const { S } = await app({ tasks: [task('a'), task('b', { doneOn: YESTERDAY }), task('c'), task('d', { stage: 'backlog' })],
+    block_placements: [inBlock('p1', 'c', NEXT_MONDAY, 'ma')] });
+  eq(S.goalStats(S.goal('g1')), { total: 4, done: 1, open: 3, planned: 1,
+    lists: { inbox: 0, open: 1, planned: 1, done: 1, backlog: 1 } });
 });
 
 /* ---------- reloading only what changed ---------- */

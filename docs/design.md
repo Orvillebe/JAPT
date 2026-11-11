@@ -156,6 +156,7 @@ Calculated, in this order: **Gedaan** if done; **Ingepland** if it has a block p
 - **Heropen**, or unchecking a task of an achieved goal, makes the goal open again.
 - Deleting a goal with tasks asks: delete the tasks too, or send them back to the Inbox.
 - Goal colours come from a fixed set (never green like blocks or purple like periods). A new goal gets the least used colour.
+- **Progress bar** on a goal: one piece per list, as wide as its number of tasks: Gedaan green, Ingepland blue, Nog niet ingepland yellow, Backlog and Inbox grey. The same lists stand in words under it, so it needs no legend. Fixed colours, not the goal's own: a list then looks the same on every goal. An achieved goal's bar is grey.
 
 ### Planning
 

@@ -24,13 +24,15 @@ const Goals = (() => {
 
   /* ---------- shared pieces ---------- */
 
-  function statText(st) {
-    const planned = st.planned ? ' · ' + t('goal.stat_planned', { n: st.planned }) : '';
-    return t('goal.stat', { done: st.done, total: UI.tn('count.tasks', st.total) }) + planned;
+  // The progress bar: one piece per list, as wide as its number of tasks, and the same lists in words
+  // under it. Lists without tasks are left out.
+  const BAR_ORDER = [M.LIST.DONE, M.LIST.PLANNED, M.LIST.OPEN, M.LIST.BACKLOG, M.LIST.INBOX];
+  function progressHtml(st, statClass) {
+    const shown = BAR_ORDER.filter(l => st.lists[l]);
+    const pieces = shown.map(l => `<i class="b-${l}" style="flex:${st.lists[l]}"></i>`).join('');
+    const words = shown.map(l => t('goal.stat_' + l, { n: st.lists[l] })).join(' · ');
+    return `<div class="bar">${pieces}</div><div class="${statClass}">${words}</div>`;
   }
-  const pctOf = st => (st.total ? Math.round(st.done / st.total * 100) : 0);
-  const progressHtml = (st, statClass) =>
-    `<div class="bar"><i style="width:${pctOf(st)}%"></i></div><div class="${statClass}">${statText(st)}</div>`;
 
   // One choice in a question about a goal's tasks; attr is the data attribute that carries the choice.
   function optionHtml(attr, value, picked, label) {

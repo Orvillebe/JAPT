@@ -23,7 +23,9 @@ const CalendarWeek = (() => {
 
   const dim = k => (FilterPicker.count() && !FilterPicker.passes(k) ? 'dim' : '');
   const part = (n, i) => (n > 1 ? `<span class="p">${i}/${n}</span>` : '');
-  const dropHere = () => `<div class="empty">${t('cal.drop_here')}</div>`;
+  // An empty block says what it is called, above where to drop: a task put in it takes that place.
+  const dropHere = (name = '') =>
+    `<div class="empty">${name ? `<span class="bn">${esc(name)}</span>` : ''}${t('cal.drop_here')}</div>`;
 
   // A task in a block or period. from: the place it sits in; fromPeriod: shown in that period's column.
   function chip(k, from, { side = '', after = '', fromPeriod = null } = {}) {
@@ -150,7 +152,7 @@ const CalendarWeek = (() => {
   }
   const MEETING_GAP_PX = 3;
   const SHORT_MINUTES = 45;   // shorter is just room for its times and one task, so both get smaller
-  // head: the block's name and times, on its first piece only.
+  // head: the times of this piece (what is free, not what the block was), on its first piece only.
   function blockPiece(place, from, to, firstHour, head, content, { noRoom = false, part = false, block = null } = {}) {
     // Next to a meeting a piece keeps the same small distance above and below.
     const gapAbove = block && from > block.start ? MEETING_GAP_PX : 0;
@@ -170,16 +172,17 @@ const CalendarWeek = (() => {
   function blockHtml(day, block, firstHour, meetings) {
     const place = { date: day, blockId: block.id };
     const ids = Store.idx().tasksIn(place), chips = ids.map(id => blockChip(id, place)).join('');
-    const label = block.label ? `<span>${esc(block.label)}</span>` : '';
-    const head = `<div class="bh">${label}<span>${UI.span(UI.fmt(block.start), UI.fmt(block.end))}</span></div>`;
+    const head = (from, to) => `<div class="bh"><span>${UI.span(UI.fmt(from), UI.fmt(to))}</span></div>`;
     const parts = M.freeParts(block, meetings);
     if (!parts.length) {
-      return blockPiece(place, block.start, block.end, firstHour, head, coveredTasksHtml(ids), { noRoom: true });
+      return blockPiece(place, block.start, block.end, firstHour, head(block.start, block.end), coveredTasksHtml(ids), { noRoom: true });
     }
     const isPart = parts.length > 1 || parts[0].start !== block.start || parts[0].end !== block.end;
     return parts.map((part, i) => {
-      const content = `<div class="list">${i === 0 ? chips || dropHere() : dropHere()}</div>`;
-      return blockPiece(place, part.start, part.end, firstHour, i === 0 ? head : '', content, { part: isPart, block });
+      const name = i === 0 ? block.label || '' : '';
+      const content = `<div class="list" data-name="${esc(name)}">${(i === 0 && chips) || dropHere(name)}</div>`;
+      const top = i === 0 ? head(part.start, part.end) : '';
+      return blockPiece(place, part.start, part.end, firstHour, top, content, { part: isPart, block });
     }).join('');
   }
   function dayColumnHtml(day, firstHour, lastHour) {
@@ -244,7 +247,7 @@ const CalendarWeek = (() => {
         fitPiece(piece);
       }
     });
-    lists.filter(list => !list.children.length).forEach(list => { list.innerHTML = dropHere(); });
+    lists.filter(list => !list.children.length).forEach(list => { list.innerHTML = dropHere(list.dataset.name); });
   }
 
   function fitBlocks() {

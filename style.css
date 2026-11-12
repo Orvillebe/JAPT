@@ -492,6 +492,7 @@ dialog.gvw.editing{overflow:visible}
 .block .list{display:flex;flex-direction:column;gap:6px;overflow-y:auto;min-height:0;flex:1}
 .empty{color:var(--block-ink);font-size:12.5px;padding:2px}
 .block .empty{min-height:0;overflow:hidden}   /* de tekst wordt afgekapt, nooit gescrold: alleen taken scrollen in een blok */
+.block .empty .bn{display:block}   /* de naam van het blok, een regel boven "Sleep hier" */
 .chip{display:flex;flex-direction:column;gap:5px;padding:6px 6px;border-radius:6px;border:1px solid var(--tb);
   border-left:5px solid var(--tb);background:var(--tbg);font-size:13.5px;cursor:pointer;flex:none}
 .chip .ct{display:flex;align-items:flex-start;gap:4px 6px;flex-wrap:wrap}

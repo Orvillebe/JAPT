@@ -103,6 +103,7 @@ const Calendar = (() => {
     renderBar();
     drawCurrentView();
     reapplyFocus();
+    Landscape.sync();   // Week and Werkweek lie down on a phone
   }
 
   /* ---------- dropping on blocks and periods ---------- */

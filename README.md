@@ -166,6 +166,7 @@ One file per task; each file starts with what it is responsible for.
 | `figures.js` | The small figures that sometimes walk by when a task is checked off |
 | `drag.js` | Dragging a task: one handler for the page, each screen registers its drop zones |
 | `calendar-views.js` | The table of calendar views, the days on screen, periods as shown |
+| `landscape.js` | Week and Werkweek lie down on a phone by themselves |
 | `calendar.js` | Taken page, right: the bar, drawing, dropping, swiping |
 | `calendar-week.js`, `calendar-period.js`, `calendar-list.js`, `calendar-card.js` | The day and week views, the work-period view, the list view, the open task card |
 | `tasks.js` | Taken page, left: the task lists and the form |
@@ -188,7 +189,6 @@ Not built, but prepared for. Each can be added without changing the data that ex
 - **Your own name on a new task** by default. A new task now starts with nobody on it.
 - **Individual work blocks:** each person their own blocks, and planning a task in your block puts your name on it. Designed in the comment at the top of the mockup's script.
 - **One agenda per person** instead of one shared team agenda.
-- **An installable app (PWA)**, so week views can open in landscape on a phone.
 - **Adding to the Inbox without a connection:** new Inbox tasks wait on the phone and are sent once there is a connection. The first version is already built for it (ids made in the app, one save per Inbox task that can safely be sent twice); what's left is the queue and a service worker, built together with the installable app.
 - **Sharing a photo to JAPT from an Android phone**, straight into a new Inbox task. Needs the installable app above and a small service worker. Not possible on iPhone.
 - **Inviting someone from JAPT** instead of adding them in the database: an email address in Beheer > Gebruikers, the invitation mail, choosing a password in JAPT, and access switched on and off in Beheer.

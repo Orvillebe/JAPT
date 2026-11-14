@@ -76,6 +76,7 @@ const App = (() => {
     if (View.page === 'goals') Goals.render();
     if (View.page === 'inbox') Inbox.render();
     Inbox.badge();
+    Photos.fill(document.body);   // the photos on the task cards just drawn, read only now they are shown
   }
   // Something that arrives by itself (the agenda, a reload) never redraws under a drag or an open task
   // card, which would take them away from under your hand: it waits until they are done.

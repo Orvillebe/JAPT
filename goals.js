@@ -143,6 +143,7 @@ const Goals = (() => {
       ${goalFieldsHtml(g, st)}
       ${lists ? viewField(t('goal.tasks_n', { n: st.total }), lists) : ''}
       ${gv.confirmAch ? achieveQuestionHtml(st) : viewActionsHtml(g)}`;
+    Photos.fill(gv.dlg);
   }
 
   function openView(id) {

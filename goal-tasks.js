@@ -82,7 +82,7 @@ const GoalTasks = (() => {
     </div>`;
   }
 
-  // The lists of goal g, for the goal view. Fill the photo marks with Photos.fill once it is in the page.
+  // The lists of goal g, for the goal view. Fill the photos with Photos.fill once it is in the page.
   const listsHtml = g => SHOWN.map(list => sectionHtml(g, list)).join('');
 
   /* ---------- clicks ---------- */

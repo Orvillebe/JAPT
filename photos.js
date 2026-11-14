@@ -8,7 +8,7 @@
  *   - Making a photo smaller before it is stored (config.js, photoMaxSide and photoQuality); drawing it
  *     again as a JPEG also leaves out what a camera writes into a photo, such as where it was taken
  *   - A photo is read only when it is shown, once per session (url)
- *   - The small mark on a task in the planning that says it has photos
+ *   - The small mark on a chip in the planning that says it has photos; the task card shows the photos
  *   - Full screen: one photo at a time, with the others by arrows, keys or swiping
  *
  * What it looks like and why is in docs/design.md, Photos.
@@ -58,11 +58,13 @@ const Photos = (() => {
   const thumbHtml = (p, removable) => html`
     <span class="phw" data-phid="${p.id}">
       <button type="button" class="pht" data-phopen="${p.id}" title="${t('photo.open')}"
-        style="aspect-ratio:${p.width}/${p.height}"><img alt="" ${p.url ? `src="${p.url}"` : `data-src="${p.id}"`}></button>
+        style="--ratio:${p.width}/${p.height}"><img alt="" draggable="false"
+        ${p.url ? `src="${p.url}"` : `data-src="${p.id}"`}></button>
       ${removable ? `<button type="button" class="phx" data-phx="${p.id}" title="${t('photo.remove')}">×</button>` : ''}
     </span>`;
+  // On a card the photos are small squares; in the form (removable) larger, in their own proportions.
   const rowHtml = (list, removable) => (list.length
-    ? `<div class="phrow">${list.map(p => thumbHtml(p, removable)).join('')}</div>` : '');
+    ? `<div class="phrow ${removable ? 'edit' : ''}">${list.map(p => thumbHtml(p, removable)).join('')}</div>` : '');
 
   // The photos of a task for the task card, or '' without photos. Call fill(card) once it is in the page.
   const cardHtml = taskId => rowHtml(Store.photosOf(taskId), false);
@@ -177,11 +179,41 @@ const Photos = (() => {
           <div class="notefoot">
             <div class="phslot"></div>
             <button type="button" class="phadd" title="${t('photo.add')}" aria-label="${t('photo.add')}">${CAMERA}</button>
-            <input type="file" accept="image/*" multiple hidden>
+            <input type="file" accept="image/*" multiple hidden data-phpick>
+            <input type="file" accept="image/*" capture="environment" hidden data-phtake>
           </div>
         </div>
       </div>`;
   }
+
+  // On a phone or tablet the camera button asks JAPT's own question, the same on every phone: what Android or
+  // iOS offers for "an image" differs per version, and a recent Android offers no camera at all. On a computer
+  // there is no camera: the button opens the files at once.
+  const TOUCH = () => matchMedia('(pointer: coarse)').matches;
+  let choice = null;   // the open choice under a camera button, made when it opens and removed when it closes
+  function closeChoice() {
+    if (!choice) return false;
+    choice.remove(); choice = null;
+    return true;
+  }
+  function openChoice(field) {
+    if (closeChoice()) return;
+    choice = document.createElement('div');
+    choice.className = 'phchoice';
+    choice.innerHTML = `<button type="button" data-phc="take">${t('photo.take')}</button>`
+      + `<button type="button" data-phc="pick">${t('photo.pick')}</button>`;
+    choice.onclick = e => {
+      const b = e.target.closest('[data-phc]');
+      if (!b) return;
+      closeChoice();
+      field.querySelector(b.dataset.phc === 'take' ? '[data-phtake]' : '[data-phpick]').click();
+    };
+    field.querySelector('.notefoot').append(choice);
+  }
+  UI.onEscape(closeChoice);
+  document.addEventListener('click', e => {
+    if (choice && !e.target.closest('.phchoice, .phadd')) closeChoice();
+  });
 
   // Makes a note field (noteFieldHtml) work for a task: its photos, and what is added and taken off.
   // pasteArea: where pasting an image adds it (the whole form). Returns:
@@ -191,7 +223,7 @@ const Photos = (() => {
   //   reset(id)  -> empty again, for a next task (the Inbox)
   function editor(field, pasteArea, taskId) {
     const box = field.querySelector('.notebox'), slot = field.querySelector('.phslot');
-    const input = field.querySelector('input[type=file]');
+    const input = field.querySelector('[data-phpick]');
     let current = taskId, added = [], removed = new Set(), working = [];
 
     const shown = () => [
@@ -214,8 +246,10 @@ const Photos = (() => {
       return images.length > 0;
     }
 
-    field.querySelector('.phadd').onclick = () => input.click();
-    input.onchange = () => { addFiles(input.files); input.value = ''; };
+    field.querySelector('.phadd').onclick = () => (TOUCH() ? openChoice(field) : input.click());
+    field.querySelectorAll('input[type=file]').forEach(el => {
+      el.onchange = () => { addFiles(el.files); el.value = ''; };
+    });
     slot.addEventListener('click', e => {
       const x = e.target.closest('[data-phx]');
       if (!x) return;

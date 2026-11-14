@@ -249,6 +249,8 @@ const NL = {
 
   'toast.undo': 'Ongedaan',
   'photo.add': 'Foto toevoegen',
+  'photo.take': 'Foto nemen',
+  'photo.pick': 'Foto kiezen',
   'photo.remove': 'Foto weghalen',
   'photo.open': 'Foto groot bekijken',
   'photo.close': 'Sluiten',

@@ -153,7 +153,8 @@ const UI = (() => {
     return `<div class="meta">${metaRow('plan', t('meta.plan'), links, 'v links')}</div>`;
   }
 
-  // A card in a list. extra: more buttons; noPen: no pencil; noPlan: without the Plan line.
+  // A card in a list, with its photos (Photos.fill once in the page).
+  // extra: more buttons; noPen: no pencil; noPlan: without the Plan line.
   function taskCard(k, { extra = '', noPen = false, noPlan = false } = {}) {
     const classes = `task ${k.doneOn ? 'done' : ''} ${Store.isLate(k) ? 'late' : ''}`;
     const note = k.note ? `<div class="desc">${esc(k.note)}</div>` : '';
@@ -162,8 +163,8 @@ const UI = (() => {
       <div class="${classes}" draggable="true" data-task="${k.id}" style="${taskStyle(k)}">
         ${chk(k)}
         <div class="body">
-          <div class="trow"><div class="title">${esc(k.title)}</div><div class="who">${Photos.mark(k)}${whoHtml(k)}</div></div>
-          ${note}${metaLine(k)}${noPlan ? '' : planLinks(k)}
+          <div class="trow"><div class="title">${esc(k.title)}</div><div class="who">${whoHtml(k)}</div></div>
+          ${note}${Photos.cardHtml(k.id)}${metaLine(k)}${noPlan ? '' : planLinks(k)}
         </div>
         <div class="acts">${pen}${extra}</div>
       </div>`;

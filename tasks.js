@@ -294,8 +294,12 @@ const Tasks = (() => {
     const stage = k ? k.stage : q('[name=list]').value;
     if (UI.showProblems(Store.taskProblems(fields, stage), { title: state.titleEl, goal: state.goalEl })) return;
     state.busy = true;
+    // A new task that a save without an answer did store: trying again changes it, it doesn't add another.
+    const stored = !k && Store.task(state.newId);
     const res = await UI.act(() => (
-      k ? Store.updateTask(id, fields, state.seenAt) : Store.createTask({ ...fields, stage })
+      k ? Store.updateTask(id, fields, state.seenAt)
+        : stored ? Store.updateTask(state.newId, fields, stored.changedAt)
+          : Store.createTask({ ...fields, stage, id: state.newId })
     ));
     state.busy = false;
     if (!res) {   // not saved: the form stays as you left it
@@ -338,11 +342,12 @@ const Tasks = (() => {
     const state = {
       seenAt: k ? k.changedAt : undefined,   // the version this form shows
       id, task: k, dlg, q,
+      newId: k ? null : newId(),   // a new task's id, once: trying again after a lost answer saves the same task
       titleEl: q('[name=title]'), goalEl: q('[name=goal]'), deadlineEl: q('[name=deadline]'),
       who: k ? Store.whoOf(id).slice() : [],
       delArmed: false, busy: false
     };
-    state.photos = Photos.editor(q('.notebox').parentElement, f, id);
+    state.photos = Photos.editor(q('.notebox').parentElement, f, id || state.newId);
 
     state.goalEl.value = (k ? k.goalId : preset.goalId) || '';
     GoalPicker.build(state.goalEl);

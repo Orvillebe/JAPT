@@ -840,6 +840,53 @@ test('a refused save stores no photo either', async () => {
   eq(await stored('task_photos'), []);
   eq(await photoBytes(S, 'f1'), null);
 });
+/* ---------- trying again after a save that got no answer ---------- */
+
+// The next save reaches the database, but its answer is lost on the way back: the app reloads, as UI.act does.
+function loseNextAnswer(DS) {
+  const batch = DS.batch;
+  DS.batch = async ops => {
+    DS.batch = batch;
+    await batch(ops);
+    throw Object.assign(new Error('Failed to fetch'), { code: 'no-answer' });
+  };
+}
+async function savedWithoutAnswer(S, DS, save) {
+  loseNextAnswer(DS);
+  await assert.rejects(save(), e => e.code === 'no-answer');
+  await S.reload();
+}
+const formFields = { title: 'Nieuw', note: '', goalId: 'g1', who: ['u1'], deadline: null, repeat: null };
+
+test('a new task tried again after no answer is changed, not made twice', async () => {
+  const { S, DS, stored } = await app();
+  const photos = { add: [newPhoto('f1')] };
+  await savedWithoutAnswer(S, DS, () => S.createTask({ ...formFields, id: 'n1', photos }));
+  // The form sees its task is stored and changes it (tasks.js), with the same photo still in the form.
+  await S.updateTask('n1', { ...formFields, title: 'Nieuw, beter', photos }, S.task('n1').changedAt);
+  eq((await stored('tasks')).map(k => [k.id, k.title]), [['n1', 'Nieuw, beter']]);
+  eq(ids(await stored('task_photos')), ['f1']);
+  eq((await stored('task_members')).length, 1);
+});
+test('an Inbox task tried again after no answer is stored once, also when sent again as new', async () => {
+  const { S, DS, stored } = await app();
+  const fields = { title: 'Idee', who: ['u1'], photos: { add: [newPhoto('f1')] } };
+  await savedWithoutAnswer(S, DS, () => S.addInboxTask({ ...fields, id: 'i1' }));
+  await S.addInboxTask({ ...fields, id: 'i1' });   // the queue for adding without a connection will do this
+  await S.updateTask('i1', { ...fields, note: '', goalId: null, deadline: null, repeat: null }, S.task('i1').changedAt);
+  eq(ids(await stored('tasks')), ['i1']);
+  eq(ids(await stored('task_photos')), ['f1']);
+  eq((await stored('task_members')).length, 1);
+});
+test('a new photo on a task tried again after no answer is stored once', async () => {
+  const { S, DS, stored } = await app({ tasks: [task('a')] });
+  await savedWithoutAnswer(S, DS, () => edit(S, 'a', { add: [newPhoto('f1')] }));
+  await edit(S, 'a', { add: [newPhoto('f1'), newPhoto('f2')] }, { note: 'Nog een foto erbij' });
+  eq(ids(await stored('task_photos')), ['f1', 'f2']);
+  eq(S.task('a').note, 'Nog een foto erbij');
+  eq(await photoBytes(S, 'f1'), JPEG);
+});
+
 test('photos stay with a task in the Bin and go when it is removed for good', async () => {
   const { S, DS, stored } = await app({ tasks: [task('a')] });
   await edit(S, 'a', { add: [newPhoto('f1')] });

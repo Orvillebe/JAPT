@@ -221,14 +221,18 @@ const Photos = (() => {
   //   ready()    -> waits until photos being made smaller are done
   //   saved()    -> after a save went through: the added photos are shown from memory from now on
   //   reset(id)  -> empty again, for a next task (the Inbox)
+  // taskId: the task the photos belong to, also a new one that has its id already (tasks.js, inbox.js).
   function editor(field, pasteArea, taskId) {
     const box = field.querySelector('.notebox'), slot = field.querySelector('.phslot');
     const input = field.querySelector('[data-phpick]');
     let current = taskId, added = [], removed = new Set(), working = [];
 
+    // A photo added here may be stored already (a save that got no answer, then a reload): shown once.
+    const stored = () => (current ? Store.photosOf(current) : []);
+    const isStored = id => stored().some(p => p.id === id);
     const shown = () => [
-      ...(current ? Store.photosOf(current).filter(p => !removed.has(p.id)) : []),
-      ...added
+      ...stored().filter(p => !removed.has(p.id)),
+      ...added.filter(p => !isStored(p.id))
     ];
     function draw() {
       slot.innerHTML = rowHtml(shown(), true);
@@ -254,7 +258,8 @@ const Photos = (() => {
       const x = e.target.closest('[data-phx]');
       if (!x) return;
       const id = x.dataset.phx, a = added.find(p => p.id === id);
-      if (a) { added = added.filter(p => p !== a); URL.revokeObjectURL(a.url); } else removed.add(id);
+      if (a) { added = added.filter(p => p !== a); URL.revokeObjectURL(a.url); }
+      if (!a || isStored(id)) removed.add(id);
       draw();
     });
     pasteArea.addEventListener('paste', e => {
@@ -272,14 +277,11 @@ const Photos = (() => {
 
     return {
       ready: () => Promise.all(working),
-      // A photo that is already stored (a save that got no answer, then a reload) isn't sent again.
-      changes() {
-        const stored = new Set(current ? Store.photosOf(current).map(p => p.id) : []);
-        return {
-          add: added.filter(p => !stored.has(p.id)).map(({ id, data, width, height }) => ({ id, data, width, height })),
-          remove: [...removed]
-        };
-      },
+      // One already stored isn't sent again: Store leaves it out.
+      changes: () => ({
+        add: added.filter(p => !removed.has(p.id)).map(({ id, data, width, height }) => ({ id, data, width, height })),
+        remove: [...removed]
+      }),
       saved() {
         added.forEach(p => urls.set(p.id, Promise.resolve(p.url)));
         added = []; removed = new Set();

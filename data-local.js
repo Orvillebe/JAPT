@@ -92,7 +92,10 @@ function createLocalData() {
     const rows = db[o.table];
     if (!rows) throw new Error('Unknown table ' + o.table);
     if (o.op === 'insert') {
-      if (rows.some(r => r.id === o.row.id)) {
+      // As in the database: one row per id, and a person once on a task (unique task_id, member_id).
+      const same = r => r.id === o.row.id
+        || (o.table === 'task_members' && r.taskId === o.row.taskId && r.memberId === o.row.memberId);
+      if (rows.some(same)) {
         if (o.ifNew) return null;   // already there: sending a new row twice is harmless
         throw new Error(`Exists: ${o.table} ${o.row.id}`);
       }

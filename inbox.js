@@ -174,12 +174,16 @@ const Inbox = (() => {
     adding = true;
     await noteEditor.ready();   // a photo still being made smaller goes along
     fields.photos = noteEditor.changes();
-    const res = await UI.act(() => Store.addInboxTask(fields));
+    // Stored by a save without an answer: trying again changes that task, as the task form does.
+    const stored = Store.task(entryId), id = entryId;
+    const res = await UI.act(() => (stored
+      ? Store.updateTask(id, fields, stored.changedAt) : Store.addInboxTask({ ...fields, id })));
     adding = false;
     if (res) {
       noteEditor.saved();
-      noteEditor.reset();
-      recent.push(res.id);
+      entryId = newId();
+      noteEditor.reset(entryId);
+      recent.push(id);
       inp.value = '';
       $('ibDesc').value = '';
       $('ibGoal').value = '';
@@ -273,9 +277,12 @@ const Inbox = (() => {
   }
 
   let noteEditor = null;   // the note with its photos (photos.js)
+  // The id of the task being typed, made before the first try: trying again after a lost answer saves the
+  // same task, never a second one. A new one once it is stored.
+  let entryId = newId();
   function init() {
     $('ibNote').outerHTML = Photos.noteFieldHtml({ id: 'ibDesc', rows: 2, cls: 'f full' });
-    noteEditor = Photos.editor($('ibDesc').closest('.f'), $('ibForm'), null);
+    noteEditor = Photos.editor($('ibDesc').closest('.f'), $('ibForm'), entryId);
     $('ibForm').onsubmit = e => { e.preventDefault(); add(); };
     $('ibWho').onclick = toggleWho;
     DeadlinePicker.wrap($('ibDeadline'));

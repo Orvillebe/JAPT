@@ -106,6 +106,7 @@ const Store = (() => {
   // Memory takes over the row as it was stored; a removed or binned row leaves memory.
   function followInMemory(o, row) {
     if (!raw[o.table]) return;
+    if (o.op === 'insert' && o.ifNew && !row) return;   // it was there already: memory keeps it as it is
     const id = o.op === 'insert' ? o.row.id : o.id, rows = raw[o.table], at = rows.findIndex(r => r.id === id);
     if (o.op === 'remove' || !row || (BINNED_TABLES.includes(o.table) && row.deletedAt)) {
       if (at >= 0) rows.splice(at, 1);
@@ -343,10 +344,11 @@ const Store = (() => {
   });
   const peopleOps = (taskId, who) => who.map(m => ins('task_members', { taskId, memberId: m }));
   // Photos added and taken off in a form: {add: [{id, data (JPEG as base64), width, height}], remove: [id]}.
-  // A photo goes in the same save as its task, so they are stored together or not at all.
+  // A photo goes in the same save as its task, so they are stored together or not at all. One already
+  // stored (a save that got no answer, then a reload) isn't sent again, as one already gone isn't removed.
   const photoOps = (taskId, { add = [], remove = [] } = {}) => [
     ...remove.filter(id => find('task_photos', id)).map(id => del('task_photos', id)),
-    ...add.flatMap(({ id, data, width, height }) => [
+    ...add.filter(p => !find('task_photos', p.id)).flatMap(({ id, data, width, height }) => [
       { op: 'insert', table: 'task_photos', row: { id, taskId, width, height } },
       { op: 'insert', table: 'photo_data', row: { id, data } }
     ])
@@ -404,10 +406,12 @@ const Store = (() => {
 
   /* ---------- tasks ---------- */
 
+  // id: made once when the form opened, so a second try after a lost answer can't make a second task.
   async function createTask(fields) {
-    const { title, note = '', goalId = null, who = [], deadline = null, repeat = null, stage = STAGE.OPEN, photos } = fields;
+    const { id = newId(), title, note = '', goalId = null, who = [], deadline = null, repeat = null, stage = STAGE.OPEN,
+      photos } = fields;
     refuse(taskProblems({ title, goalId }, stage));
-    const row = taskRow({ title, note, goalId, stage, deadline, repeat });
+    const row = taskRow({ id, title, note, goalId, stage, deadline, repeat });
     return run({ ops: [{ op: 'insert', table: 'tasks', row }, ...whoOps(row.id, who), ...photoOps(row.id, photos)] });
   }
   async function updateTask(id, { title, note, goalId, who, deadline, repeat, photos }, seenAt) {
@@ -522,10 +526,12 @@ const Store = (() => {
   /* ---------- inbox ---------- */
 
   // One self-contained save that may safely be sent twice: the queue for adding without a
-  // connection will sit here (docs/design.md, Inbox; Possible future).
-  async function addInboxTask({ title, note = '', goalId = null, who = [], deadline = null, repeat = null, photos }) {
+  // connection will sit here (docs/design.md, Inbox; Possible future). id: one per entry, made before
+  // the first try, so trying again after a lost answer sends the same task and it is stored once.
+  async function addInboxTask({ id = newId(), title, note = '', goalId = null, who = [], deadline = null, repeat = null,
+    photos }) {
     const knownGoal = goalId && goal(goalId) ? goalId : null;
-    const row = taskRow({ title, note, goalId: knownGoal, stage: STAGE.INBOX, deadline, repeat });
+    const row = taskRow({ id, title, note, goalId: knownGoal, stage: STAGE.INBOX, deadline, repeat });
     const insert = { op: 'insert', table: 'tasks', row };
     const ops = [insert, ...peopleOps(row.id, who), ...photoOps(row.id, photos)].map(o => ({ ...o, ifNew: true }));
     return { id: row.id, ...(await run({ ops })) };

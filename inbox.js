@@ -174,12 +174,12 @@ const Inbox = (() => {
     adding = true;
     await noteEditor.ready();   // a photo still being made smaller goes along
     fields.photos = noteEditor.changes();
-    // Stored by a save without an answer: trying again changes that task, as the task form does.
-    const stored = Store.task(entryId), id = entryId;
-    const res = await UI.act(() => (stored
-      ? Store.updateTask(id, fields, stored.changedAt) : Store.addInboxTask({ ...fields, id })));
+    const id = entryId;
+    const res = await UI.act(() => Store.addInboxTask({ ...fields, id }));
     adding = false;
-    if (res) {
+    // No answer, but after the reload the task is there: it was stored, so this entry is done. Decided now,
+    // not at the next click: by then the fields may hold the next task.
+    if (res || Store.task(id)) {
       noteEditor.saved();
       entryId = newId();
       noteEditor.reset(entryId);
@@ -277,7 +277,7 @@ const Inbox = (() => {
   }
 
   let noteEditor = null;   // the note with its photos (photos.js)
-  // The id of the task being typed, made before the first try: trying again after a lost answer saves the
+  // The id of the task being typed, made before the first try: trying again after a lost answer sends the
   // same task, never a second one. A new one once it is stored.
   let entryId = newId();
   function init() {

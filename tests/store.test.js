@@ -858,25 +858,32 @@ async function savedWithoutAnswer(S, DS, save) {
 }
 const formFields = { title: 'Nieuw', note: '', goalId: 'g1', who: ['u1'], deadline: null, repeat: null };
 
-test('a new task tried again after no answer is changed, not made twice', async () => {
+test('a new task whose answer is lost is there after the reload, under the id the form made', async () => {
   const { S, DS, stored } = await app();
-  const photos = { add: [newPhoto('f1')] };
-  await savedWithoutAnswer(S, DS, () => S.createTask({ ...formFields, id: 'n1', photos }));
-  // The form sees its task is stored and changes it (tasks.js), with the same photo still in the form.
-  await S.updateTask('n1', { ...formFields, title: 'Nieuw, beter', photos }, S.task('n1').changedAt);
-  eq((await stored('tasks')).map(k => [k.id, k.title]), [['n1', 'Nieuw, beter']]);
-  eq(ids(await stored('task_photos')), ['f1']);
-  eq((await stored('task_members')).length, 1);
+  await savedWithoutAnswer(S, DS, () => S.createTask({ ...formFields, id: 'n1', photos: { add: [newPhoto('f1')] } }));
+  eq(S.task('n1').title, 'Nieuw', 'the form sees it is stored and closes (tasks.js)');
+  eq(ids(await stored('tasks')), ['n1']);
+  eq(S.photosOf('n1').map(p => p.id), ['f1']);
 });
-test('an Inbox task tried again after no answer is stored once, also when sent again as new', async () => {
+test('the Inbox: a lost answer, then the next entry, are two tasks', async () => {
+  const { S, DS, stored } = await app();
+  // As inbox.js: the entry counts as added once it is there after the reload, and the next one gets a new id.
+  await savedWithoutAnswer(S, DS, () => S.addInboxTask({ title: 'Bel de klant', id: 'i1', photos: { add: [newPhoto('f1')] } }));
+  eq(S.task('i1').title, 'Bel de klant');
+  await S.addInboxTask({ title: 'Offerte sturen', id: 'i2' });
+  eq((await stored('tasks')).map(k => [k.id, k.title]).sort(), [['i1', 'Bel de klant'], ['i2', 'Offerte sturen']]);
+  eq(S.photosOf('i1').map(p => p.id), ['f1']);
+  eq(S.photosOf('i2'), []);
+});
+test('an Inbox task sent again under the same id is stored once and stays in view', async () => {
   const { S, DS, stored } = await app();
   const fields = { title: 'Idee', who: ['u1'], photos: { add: [newPhoto('f1')] } };
   await savedWithoutAnswer(S, DS, () => S.addInboxTask({ ...fields, id: 'i1' }));
   await S.addInboxTask({ ...fields, id: 'i1' });   // the queue for adding without a connection will do this
-  await S.updateTask('i1', { ...fields, note: '', goalId: null, deadline: null, repeat: null }, S.task('i1').changedAt);
   eq(ids(await stored('tasks')), ['i1']);
   eq(ids(await stored('task_photos')), ['f1']);
   eq((await stored('task_members')).length, 1);
+  eq(S.task('i1').title, 'Idee');
 });
 test('a new photo on a task tried again after no answer is stored once', async () => {
   const { S, DS, stored } = await app({ tasks: [task('a')] });

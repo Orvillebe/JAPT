@@ -294,15 +294,13 @@ const Tasks = (() => {
     const stage = k ? k.stage : q('[name=list]').value;
     if (UI.showProblems(Store.taskProblems(fields, stage), { title: state.titleEl, goal: state.goalEl })) return;
     state.busy = true;
-    // A new task that a save without an answer did store: trying again changes it, it doesn't add another.
-    const stored = !k && Store.task(state.newId);
     const res = await UI.act(() => (
-      k ? Store.updateTask(id, fields, state.seenAt)
-        : stored ? Store.updateTask(state.newId, fields, stored.changedAt)
-          : Store.createTask({ ...fields, stage, id: state.newId })
+      k ? Store.updateTask(id, fields, state.seenAt) : Store.createTask({ ...fields, stage, id: state.newId })
     ));
     state.busy = false;
-    if (!res) {   // not saved: the form stays as you left it
+    // A new task with no answer that is there after the reload: it was stored, so the form is done.
+    const storedAnyway = !res && !k && !!Store.task(state.newId);
+    if (!res && !storedAnyway) {   // not saved: the form stays as you left it
       if (k) state.seenAt = UI.afterFormConflict(state.seenAt, Store.task(id), 'form.gone_task');
       return;
     }

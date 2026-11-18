@@ -27,7 +27,8 @@ const JAPT_CONFIG = (() => {
     dayStart: 8,
     dayEnd: 18,
 
-    // How long a loaded agenda is kept before it is read again (minutes). docs/design.md, Meetings.
+    // How long a loaded agenda is kept before it is read again (minutes), and the longest wait between
+    // tries when it can't be read (agenda.js starts at 1 minute and doubles). docs/design.md, Meetings.
     agendaMinutes: 10,
 
     // How often the team's changes are loaded while the app is in view, and the shortest time between two

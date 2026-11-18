@@ -341,7 +341,9 @@ const NL = {
   'agenda.secret': 'Wie deze link heeft, kan de hele agenda lezen. Alleen wie JAPT mag gebruiken ziet hem hier.',
   'agenda.saved': 'Agenda-link bewaard',
   'agenda.need_https': 'Een agenda-link begint met https://.',
-  'agenda.unreachable': 'Agenda niet bereikbaar',
+  'agenda.missing': 'Agenda niet bereikbaar, meetings ontbreken',
+  'agenda.stale': 'Agenda niet bijgewerkt sinds {t}',
+  'agenda.retry': 'Opnieuw proberen',
   'agenda.unreachable_long': 'De agenda is nu niet bereikbaar. Klopt de link nog? De kalender toont de werkblokken zonder meetings.',
 
   'bin.title': 'Prullenbak',

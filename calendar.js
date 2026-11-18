@@ -15,7 +15,7 @@
  */
 
 const Calendar = (() => {
-  const M = Model, { $, View, MODE } = UI;
+  const M = Model, { $, View, MODE, esc } = UI;
   const {
     SURFACE, currentView, viewClasses, calDays, isRunning, periodWindow, periodPlace, yearOf, yearSuffix
   } = CalendarViews;
@@ -61,9 +61,21 @@ const Calendar = (() => {
     return View.mode === MODE.DAY ? dayTitle(first) : rangeTitle(first, last);
   }
   function barSubtitle() {
-    let sub = FilterPicker.count() ? t('cal.filter_on') : '';
-    if (Agenda.failed()) sub += (sub ? ' · ' : '') + t('agenda.unreachable');
-    return sub;
+    return FilterPicker.count() ? t('cal.filter_on') : '';
+  }
+  // The agenda couldn't be read: one thin line saying since when the meetings shown are from. Agenda tries
+  // again by itself; the button does it now.
+  function renderAgendaBar() {
+    const bar = $('agBar'), show = Agenda.failed() && currentView().needsAgenda;
+    bar.hidden = !show;
+    if (!show) { bar.innerHTML = ''; return; }
+    const at = Agenda.readAt();
+    let text = t('agenda.missing');
+    if (at) {
+      const d = new Date(at), time = UI.fmt(d.getHours() * 60 + d.getMinutes()), day = M.localDs(d);
+      text = t('agenda.stale', { t: day === td() ? time : `${UI.fmtDay(day)} ${time}` });
+    }
+    bar.innerHTML = `<span>${esc(text)}</span><button type="button" data-agretry>${t('agenda.retry')}</button>`;
   }
   function renderBar() {
     const days = calDays();
@@ -73,6 +85,7 @@ const Calendar = (() => {
     $('calToday').disabled = period ? isRunning(period) : days.includes(td());
     $('calTitle').textContent = barTitle(period, days[0], days[days.length - 1]);
     $('calSub').textContent = barSubtitle();
+    renderAgendaBar();
     $('calPick').value = View.date;
     document.querySelectorAll('[data-mode]').forEach(button => {
       button.classList.toggle('active', button.dataset.mode === View.mode);
@@ -233,6 +246,7 @@ const Calendar = (() => {
   }
   function initBar() {
     $('calPrev').onclick = () => stepCalendar(-1);
+    $('agBar').onclick = e => { if (e.target.closest('[data-agretry]')) Agenda.retryNow(); };
     $('calNext').onclick = () => stepCalendar(1);
     $('calToday').onclick = () => go(td());
     $('calOpen').onclick = openDatePicker;

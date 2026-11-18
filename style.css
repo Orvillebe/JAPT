@@ -462,6 +462,9 @@ dialog.gvw.editing{overflow:visible}
 @media (pointer:coarse){ #head,#body{touch-action:pan-y} }   /* de browser doet enkel het verticale scrollen, het zijwaartse veegen is voor de kalender zelf */
 .rothint{display:none;padding:8px 12px;background:var(--warn-bg);border-bottom:1px solid var(--warn-line);font-size:13px;text-align:center}
 @media (max-width:700px) and (orientation:portrait){ .wkmode .rothint{display:block} }
+.agbar{display:flex;justify-content:center;align-items:baseline;gap:10px;padding:4px 12px;background:var(--warn-bg);border-bottom:1px solid var(--warn-line);font-size:12.5px;white-space:nowrap}   /* de agenda kon niet gelezen worden: één dunne regel */
+.agbar span{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.agbar button{flex:none;padding:0;border:0;background:none;font:inherit;color:inherit;text-decoration:underline;cursor:pointer}
 .cyhead,.cybody{display:grid;overflow-x:auto}
 .cyhead div{padding:10px 6px;text-align:center;border-bottom:1px solid var(--line);font-weight:600}
 .cyhead div small{display:block;font-weight:400;color:var(--muted);font-size:13px}

@@ -7,7 +7,8 @@
  *   - Turning repeating meetings into dates for the days on screen (ical.js), in local time
  *   - Keeping the result in memory for agendaMinutes (config.js); nothing is stored
  *   - Locally without a link: the meetings from the test data
- *   - When it fails: no meetings and a quiet note in the calendar bar; the reason in the console
+ *   - When it fails: the meetings last read stay, a bar says since when (calendar.js), and it tries again
+ *     soon, a little later each time, never while the app is out of view; the reason in the console
  *
  * Whole-day items (holidays, birthdays) are left out: the calendar shows hours, and they would cover
  * the work blocks. Assumption, see docs/design.md.
@@ -15,12 +16,30 @@
 
 const Agenda = (() => {
   const M = Model;
-  let source = null;        // {url, at, events} or {local, list}
+  let source = null;        // {url, at, events} or {local, list}; at: when it was last read
   let loading = null, failedFlag = false;
   let win = null, byDay = new Map();   // the expanded window: {from, to}, date -> meetings
 
+  // After a failed read: try again after 1 minute, then 2, 4, 8, and from then on as usual (agendaMinutes).
+  // One read of a small file per step, and none while the app is out of view: no flood of requests.
+  const RETRY_FIRST_MINUTES = 1;
+  let failures = 0, retryAt = 0, retryTimer = null;
+  let okAt = null;   // when this link was last read without a problem
+  const retryMinutes = () => Math.min(RETRY_FIRST_MINUTES * 2 ** (failures - 1), JAPT_CONFIG.agendaMinutes);
+
   const failed = () => failedFlag;
-  function reset() { source = null; win = null; byDay = new Map(); failedFlag = false; }
+  // When the meetings shown were read; null when this link was never read yet.
+  const readAt = () => okAt;
+  function reset() {
+    source = null; win = null; byDay = new Map(); failedFlag = false; okAt = null;
+    failures = 0; retryAt = 0; clearTimeout(retryTimer);
+  }
+  // "Opnieuw proberen": read again now.
+  function retryNow() {
+    if (source) source.at = 0;
+    retryAt = 0; failures = 0;
+    App.renderWhenFree();
+  }
 
   const on = ds => byDay.get(ds) || [];
 
@@ -28,7 +47,8 @@ const Agenda = (() => {
   function ensure(days) {
     if (!days.length) return;
     const url = Store.calendarUrl(), from = days[0], to = days[days.length - 1];
-    const notOld = () => Date.now() - source.at < JAPT_CONFIG.agendaMinutes * 60000;
+    const notOld = () => (failedFlag
+      ? Date.now() < retryAt : Date.now() - source.at < JAPT_CONFIG.agendaMinutes * 60000);
     const fresh = source && (source.local ? !url : source.url === url && notOld());
     if (fresh) {
       if (!win || from < win.from || to > win.to) { expand(from, to); setTimeout(App.renderWhenFree, 0); }
@@ -62,10 +82,16 @@ const Agenda = (() => {
         const s = events.find(e => e.uid === x.uid);
         if (s) s.relateException(x); else events.push(x);
       });
-      source = { url, at: Date.now(), events }; failedFlag = false;
+      source = { url, at: Date.now(), events }; failedFlag = false; failures = 0; okAt = source.at;
     } catch (e) {
       console.warn('Agenda not reachable', e);
-      source = { url, at: Date.now(), events: [] }; failedFlag = true;
+      // The best we know is what was read last: it stays, with when that was.
+      if (!source || source.url !== url) source = { url, at: Date.now(), events: [] };
+      failedFlag = true; failures++;
+      retryAt = Date.now() + retryMinutes() * 60000;
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(() => { if (document.visibilityState === 'visible') App.renderWhenFree(); },
+        retryMinutes() * 60000);
     }
   }
 
@@ -104,5 +130,5 @@ const Agenda = (() => {
     return out;
   }
 
-  return { ensure, on, failed, reset };
+  return { ensure, on, failed, readAt, retryNow, reset };
 })();

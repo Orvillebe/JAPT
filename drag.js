@@ -1,5 +1,5 @@
 /**
- * JAPT Drag - dragging a task, for every screen.
+ * JAPT Drag - dragging a task, for every screen, and a goal on Doelen.
  *
  * Responsibilities:
  *   - What is being dragged: {task, from, fromPeriod}, set first thing on dragstart, so a problem later
@@ -16,6 +16,9 @@
  *     drop(target, drag, spot) -> saves; spot is what over() said for the drop point
  *     leave()                 -> optional: the pointer left this zone or the drag ended }
  * Zones are asked in the order they were registered.
+ *
+ * A goal is dragged the same way: the element carries data-goal, the drag is {goal}, and only zones with
+ * goals: true take it (goals.js); the zones for tasks never see a goal.
  */
 
 const Drag = (() => {
@@ -47,15 +50,21 @@ const Drag = (() => {
   // The zone and target under the pointer that take this task.
   function hit(e) {
     if (!cur || !e.target.closest) return null;
-    for (const z of zones) { const el = z.find(e.target); if (el && z.accepts(cur)) return { z, el }; }
+    for (const z of zones) {
+      if (!!z.goals !== !!cur.goal) continue;   // a goal only on a goal zone, a task only on a task zone
+      const el = z.find(e.target);
+      if (el && z.accepts(cur)) return { z, el };
+    }
     return null;
   }
 
   document.addEventListener('dragstart', e => {
-    const el = e.target.closest && e.target.closest('[data-task][draggable="true"]'); if (!el) return;
-    cur = { task: el.dataset.task, from: M.parsePlace(el.dataset.from), fromPeriod: el.dataset.fromPeriod || null };
+    const el = e.target.closest && e.target.closest('[data-task][draggable="true"],[data-goal][draggable="true"]');
+    if (!el) return;
+    cur = el.dataset.goal ? { goal: el.dataset.goal }
+      : { task: el.dataset.task, from: M.parsePlace(el.dataset.from), fromPeriod: el.dataset.fromPeriod || null };
     onStarts.forEach(f => f(cur));
-    e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', cur.task);
+    e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', cur.task || cur.goal);
     // styled one moment later, so the browser's drag image is the card as it was
     setTimeout(() => {
       if (!cur) return;

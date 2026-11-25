@@ -34,7 +34,14 @@ function createLocalData() {
     4: () => {},   // migration 004 only hardens the real database
     5: () => {},   // migration 005 only notes removals in the real database
     6: db => { db.task_photos = db.task_photos || []; },
-    7: () => {}    // migration 007 only adds how the real database answers with a photo
+    7: () => {},   // migration 007 only adds how the real database answers with a photo
+    8: db => {     // migration 008: goals get a position, alphabetically per client to start with
+      const groups = new Map();
+      db.goals.forEach(g => { const k = g.clientId || ''; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(g); });
+      groups.forEach(list => list
+        .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()) || a.id.localeCompare(b.id))
+        .forEach((g, i) => { if (typeof g.position !== 'number') g.position = (i + 1) * 1024; }));
+    }
   };
 
   function upgrade(db) {

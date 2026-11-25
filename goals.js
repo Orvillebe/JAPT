@@ -2,7 +2,8 @@
  * JAPT Goals - the Doelen page.
  *
  * Responsibilities:
- *   - Goals per client (then Intern), open goals first, achieved ones on request
+ *   - Goals per client (then Intern), open goals first in your own order, achieved ones on request
+ *   - Dragging an open goal before or after another of the same client: that order holds everywhere
  *   - A goal in the large view: its fields, progress and tasks (goal-tasks.js); Behaald (asking what happens with open
  *     tasks), Heropen, editing in the same window
  *   - The goal form: a client from the list or a new one typed, a colour, deleting (asking what happens
@@ -42,7 +43,8 @@ const Goals = (() => {
 
   function card(g) {
     const st = Store.goalStats(g);
-    const attrs = `data-gopen="${g.id}" style="${UI.goalStyle(g)}" title="${t('goal.open')}"`;
+    const drag = g.achievedOn ? '' : `draggable="true" data-goal="${g.id}"`;   // your order: open goals only
+    const attrs = `data-gopen="${g.id}" ${drag} style="${UI.goalStyle(g)}" title="${t('goal.open')}"`;
     return html`<div class="gcard ${g.achievedOn ? 'ach' : ''}" ${attrs}>
       <div class="gtop">
         <b class="gname">${esc(g.name)}</b>
@@ -64,19 +66,15 @@ const Goals = (() => {
         <span class="cn">${esc(group.name)}</span>
         ${group.id ? clientEditButton(group.id) : ''}
       </div>
-      <div class="gcards">${group.goals.map(card).join('')}</div>
+      <div class="gcards" data-client="${group.id || ''}">${group.goals.map(card).join('')}</div>
     </div>`;
   }
 
   function render() {
     $('gShowAch').checked = View.showAchieved;
     const shown = Store.goals().filter(g => View.showAchieved || !g.achievedOn);
-    const byOpen = (x, y) => (x.achievedOn ? 1 : 0) - (y.achievedOn ? 1 : 0);
-    const goalsOf = c => shown.filter(g => g.clientId === c.id).sort(byOpen);
-    const groups = [
-      ...Store.clients().map(c => ({ id: c.id, name: c.name, goals: goalsOf(c) })),
-      { name: t('client.intern'), goals: shown.filter(g => g.clientId == null).sort(byOpen) }
-    ].filter(x => x.goals.length);
+    const byOpen = (x, y) => (x.achievedOn ? 1 : 0) - (y.achievedOn ? 1 : 0);   // achieved last, else your order
+    const groups = UI.byClient(shown.sort(byOpen));
     $('goalsList').innerHTML = groups.length
       ? groups.map(clientGroupHtml).join('')
       : `<div class="none-msg">${t(View.showAchieved ? 'goal.none_yet' : 'goal.none_open')}</div>`;
@@ -432,8 +430,35 @@ const Goals = (() => {
     nameEl.focus(); nameEl.select();
   }
 
+  /* ---------- dragging: your own order ---------- */
+
+  // A goal moves among the open goals of its own client; another client is no place for it (that is the form).
+  // Where: on a card, its left or right half (the cards stand in rows); beside the cards, the nearest one.
+  function goalSpot(e, list, d) {
+    const cards = [...list.querySelectorAll('.gcard[data-goal]')].filter(c => c.dataset.goal !== d.goal);
+    if (!cards.length) return false;
+    const on = e.target.closest('.gcard[data-goal]');
+    if (on && on.dataset.goal === d.goal) return false;   // on itself: nothing changes
+    const middle = c => { const r = c.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+    const el = on || cards.reduce((best, c) => {
+      const m = middle(c), dist = Math.hypot(e.clientX - m.x, e.clientY - m.y);
+      return !best || dist < best.dist ? { c, dist } : best;
+    }, null).c;
+    return { el, after: e.clientX > middle(el).x };
+  }
+  const goalZone = {
+    goals: true,
+    find: el => el.closest('#goalsList .gcards'),
+    accepts: d => !!Store.goal(d.goal),
+    over: (e, list, d) => ((Store.goal(d.goal).clientId || '') === list.dataset.client ? goalSpot(e, list, d) : false),
+    async drop(list, d, spot) {
+      if (spot) await UI.act(() => Store.moveGoal(d.goal, { id: spot.el.dataset.goal, after: spot.after }));
+    }
+  };
+
   function init() {
     GoalTasks.init();
+    Drag.zone(goalZone);
     $('btnGoalNew').onclick = () => openForm(null);
     $('gShowAch').onchange = e => { View.showAchieved = e.target.checked; View.save(); render(); };
     $('goalsList').onclick = e => {

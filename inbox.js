@@ -120,16 +120,8 @@ const Inbox = (() => {
       <div class="ibgoals2">${c.goals.map(goalCard).join('')}</div>
     </div>`;
 
-  // The open goals per client, then those without a client; a client without open goals isn't shown.
-  function clientsWithGoals() {
-    const open = Store.openGoals();
-    const perClient = Store.clients().map(c => ({ name: c.name, goals: open.filter(g => g.clientId === c.id) }));
-    const internal = { name: t('client.intern'), goals: open.filter(g => g.clientId == null) };
-    return [...perClient, internal].filter(x => x.goals.length);
-  }
-
   function drawBoard() {
-    groups = clientsWithGoals().map(c => ({
+    groups = UI.byClient(Store.openGoals()).map(c => ({   // as on Doelen, in the same order
       w: CLIENT_HEAD_WEIGHT + c.goals.length * GOAL_CARD_WEIGHT,
       html: clientBlock(c)
     }));

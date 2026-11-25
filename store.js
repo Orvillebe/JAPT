@@ -243,8 +243,10 @@ const Store = (() => {
   const members = () => raw.members.filter(m => !m.removedAt);
   const allMembers = () => raw.members;
   const clients = () => raw.clients.slice().sort((a, b) => a.name.localeCompare(b.name, 'nl'));
-  const goals = () => raw.goals;
-  const openGoals = () => raw.goals.filter(g => !g.achievedOn);
+  // The goals in your own order (position, set by dragging on Doelen); the one order everywhere they are listed.
+  const byGoalOrder = (a, b) => (a.position || 0) - (b.position || 0) || a.name.localeCompare(b.name, 'nl');
+  const goals = () => raw.goals.slice().sort(byGoalOrder);
+  const openGoals = () => goals().filter(g => !g.achievedOn);
   const tasks = () => raw.tasks.filter(k => k.stage !== STAGE.INBOX);
   const inbox = () => raw.tasks.filter(k => k.stage === STAGE.INBOX).sort((a, b) => a.position - b.position);
   const clientOfTask = id => { const g = goal((task(id) || {}).goalId); return g ? client(g.clientId) : null; };
@@ -560,16 +562,28 @@ const Store = (() => {
     return { clientId: o.row.id, ops: [o] };
   }
   const isLastGoalOfClient = g => !raw.goals.some(x => x.id !== g.id && x.clientId === g.clientId);
+  // A new goal, or one moved to another client, comes last among that client's goals.
+  const lastGoalPosition = clientId => M.between(
+    Math.max(0, ...raw.goals.filter(g => g.clientId === clientId).map(g => g.position || 0)) || null, null);
   async function createGoal({ name, note = '', clientName = '', hue }) {
     refuse(goalProblems({ name }));
     const c = clientOps(clientName);
-    return run({ ops: [...c.ops, ins('goals', { name, note, clientId: c.clientId, hue, achievedOn: null })] });
+    const row = { name, note, clientId: c.clientId, hue, achievedOn: null, position: lastGoalPosition(c.clientId) };
+    return run({ ops: [...c.ops, ins('goals', row)] });
+  }
+  // Dragging on Doelen: the goal goes before or after another goal of the same client (mark: {id, after}).
+  async function moveGoal(id, mark) {
+    const g = goal(id);
+    refuseIfGone(g, 'name', 'form.gone_goal');
+    const others = raw.goals.filter(x => x.clientId === g.clientId && x.id !== id);
+    return run({ ops: [upd('goals', id, { position: M.positionAt(others, mark.id, mark.after) })] });
   }
   async function updateGoal(id, { name, note, clientName, hue }, seenAt) {
     refuseIfGone(goal(id), 'name', 'form.gone_goal');
     refuse(goalProblems({ name }));
     const c = clientOps(clientName), g = goal(id);
-    const ops = [...c.ops, upd('goals', id, { name, note, clientId: c.clientId, hue }, seenAt)];
+    const moved = c.clientId !== g.clientId ? { position: lastGoalPosition(c.clientId) } : {};
+    const ops = [...c.ops, upd('goals', id, { name, note, clientId: c.clientId, hue, ...moved }, seenAt)];
     if (g.clientId && g.clientId !== c.clientId && isLastGoalOfClient(g)) {
       ops.push(binOp('clients', g.clientId, newId(), nowIso()));   // its last goal moved to another client
     }
@@ -773,7 +787,7 @@ const Store = (() => {
     reload,
     createTask, updateTask, setDone, moveToList, plan, unplan, unplanBlocksInPeriod, binTask,
     addInboxTask, processInbox,
-    createGoal, updateGoal, achieveGoal, reopenGoal, deleteGoal, renameClient,
+    createGoal, updateGoal, moveGoal, achieveGoal, reopenGoal, deleteGoal, renameClient,
     reviseBlock, createBlock, removeBlock, clearDay, copyDay,
     setupPeriod, changePeriod, switchPeriodOn, switchPeriodOff,
     setSetting, setCalendarUrl, addMember, updateMember, removeMember,

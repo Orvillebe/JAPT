@@ -12,7 +12,7 @@
  * Release order and rules: docs/design.md.
  */
 
-const APP_VERSION = '0.6.12';
-const SCHEMA_VERSION = 7;
+const APP_VERSION = '0.6.13';
+const SCHEMA_VERSION = 8;
 
 if (typeof module !== 'undefined') module.exports = { APP_VERSION, SCHEMA_VERSION };

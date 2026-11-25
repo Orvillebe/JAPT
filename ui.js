@@ -213,10 +213,12 @@ const UI = (() => {
 
   /* ---------- goals by client ---------- */
 
-  // Goals grouped as on Doelen: clients by name, then Intern; groups without goals left out.
+  // Goals grouped by client, the one way everywhere (Doelen, Verwerken, the goal picker, the filter): clients by
+  // name, then Intern (id null); within a client the goals in the order given (Store: your own order). Groups
+  // without goals are left out.
   const byClient = goals => [
-    ...Store.clients().map(c => ({ name: c.name, goals: goals.filter(g => g.clientId === c.id) })),
-    { name: t('client.intern'), goals: goals.filter(g => g.clientId == null) }
+    ...Store.clients().map(c => ({ id: c.id, name: c.name, goals: goals.filter(g => g.clientId === c.id) })),
+    { id: null, name: t('client.intern'), goals: goals.filter(g => g.clientId == null) }
   ].filter(x => x.goals.length);
 
   /* ---------- toast, problems at their field, saving ---------- */

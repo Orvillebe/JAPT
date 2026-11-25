@@ -510,6 +510,45 @@ test('unchecking in an achieved goal reopens the goal', async () => {
   eq(S.goal('g1').achievedOn, null);
 });
 
+/* ---------- the order of goals ---------- */
+
+const goalRow = (id, name, clientId, position) => row({ id, name, note: '', clientId, hue: 8, achievedOn: null, position });
+const goalOrder = S => S.goals().map(g => g.id);
+
+test('goals stand in your own order, a new one last of its client', async () => {
+  const { S } = await app({ goals: [goalRow('b', 'Bravo', 'c1', 2048), goalRow('a', 'Alfa', 'c1', 1024), goalRow('z', 'Zulu', null, 1024)] });
+  eq(goalOrder(S), ['a', 'z', 'b']);   // one order over all goals; grouping per client is the screens' job
+  await S.createGoal({ name: 'Charlie', clientName: 'Klant A', hue: 8 });
+  const mine = S.goals().filter(g => g.clientId === 'c1').map(g => g.name);
+  eq(mine, ['Alfa', 'Bravo', 'Charlie']);
+});
+test('dragging a goal puts it before or after another of its client', async () => {
+  const { S, stored } = await app({ goals: [goalRow('a', 'Alfa', 'c1', 1024), goalRow('b', 'Bravo', 'c1', 2048), goalRow('c', 'Charlie', 'c1', 3072)] });
+  await S.moveGoal('c', { id: 'a', after: false });
+  eq(goalOrder(S), ['c', 'a', 'b']);
+  await S.moveGoal('c', { id: 'a', after: true });
+  eq(goalOrder(S), ['a', 'c', 'b']);
+  eq((await stored('goals')).find(g => g.id === 'c').position, 1536, 'saved, between its neighbours');
+});
+test('a goal moved to another client comes last there', async () => {
+  const { S } = await app({ clients: [row({ id: 'c1', name: 'Klant A' }), row({ id: 'c2', name: 'Klant B' })],
+    goals: [goalRow('a', 'Alfa', 'c1', 1024), goalRow('x', 'Xray', 'c2', 5000), goalRow('y', 'Yankee', 'c2', 9000)] });
+  await S.updateGoal('a', { name: 'Alfa', note: '', clientName: 'Klant B', hue: 8 }, S.goal('a').changedAt);
+  eq(S.goals().filter(g => g.clientId === 'c2').map(g => g.id), ['x', 'y', 'a']);
+});
+test('goals from before the order start alphabetically per client', async () => {
+  const { DS, S } = await app();
+  const old = { schemaVersion: 7, data: startData({ goals: [
+    row({ id: 'g1', name: 'zomer', note: '', clientId: 'c1', hue: 8, achievedOn: null }),
+    row({ id: 'g2', name: 'Appel', note: '', clientId: 'c1', hue: 8, achievedOn: null }),
+    row({ id: 'g3', name: 'Intern doel', note: '', clientId: null, hue: 8, achievedOn: null })] }) };
+  DS.clear();
+  DS.importBackup(old);
+  await S.reload();
+  eq(S.goals().filter(g => g.clientId === 'c1').map(g => [g.name, g.position]), [['Appel', 1024], ['zomer', 2048]]);
+  eq(S.goal('g3').position, 1024);
+});
+
 /* ---------- inbox ---------- */
 
 test('sending the same new Inbox task twice saves it once', async () => {
